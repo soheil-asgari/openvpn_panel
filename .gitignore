@@ -38,3 +38,10 @@ htmlcov/
 # Local scan reports (redacted reports under docs/security are committed on purpose)
 gitleaks-report.json
 trufflehog-report.json
+.venv-linux/
+.ci_linux.sh
+*.json.tmp
+/rel*.json
+/runs.json
+/jobs.json
+_annot.py
