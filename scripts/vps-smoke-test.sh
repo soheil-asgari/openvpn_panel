@@ -110,7 +110,7 @@ fi
 section "disk and logs"
 root_use="$(df -P / | awk 'NR==2{print $5}' | tr -d '%')"
 if [[ "${root_use:-100}" -lt 90 ]]; then res PASS "root disk usage ${root_use}%"; else res FAIL "root disk usage ${root_use}%"; fi
-for f in "/var/log/${SLUG}-install.log"; do
+for f in "/var/log/${SLUG}-install.log" "/var/log/${SLUG}-smoke-report.txt"; do
   if [[ -f "${f}" ]]; then
     sz="$(du -m "${f}" | awk '{print $1}')"
     [[ "${sz}" -lt 50 ]] && res PASS "$(basename "${f}") ${sz} MB" || res FAIL "$(basename "${f}") ${sz} MB (large)"

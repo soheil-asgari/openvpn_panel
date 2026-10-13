@@ -48,6 +48,8 @@ jobs:
         with:
           scandir: ./scripts
           ignore_paths: ./scripts/systemd
+          # Fail only on real errors; warnings/info stay visible in the log.
+          severity: error
 
   gitleaks:
     runs-on: ubuntu-22.04

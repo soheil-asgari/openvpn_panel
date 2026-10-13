@@ -1,0 +1,39 @@
+# Two-container topology for the Tunnel Manager integration test.
+#
+#   exit  — "OpenVPN instance" side: a TCP echo server on 9443.
+#   entry — the host the panel provisions over SSH and that exposes the tunnel's
+#           public port (8443) to clients.
+#
+# Usage:
+#   docker compose -f tests/integration/docker-compose.yml up -d --build
+#   OVPN_TUNNEL_INTEGRATION=1 python -m pytest tests/integration -m integration
+services:
+  exit:
+    image: alpine:3.20
+    container_name: ovpn-tunnel-exit
+    command: >
+      sh -c "apk add --no-cache socat >/dev/null 2>&1;
+             socat -v TCP-LISTEN:9443,reuseaddr,fork EXEC:'/bin/cat'"
+    networks:
+      tunnelnet:
+        ipv4_address: 10.99.0.3
+
+  entry:
+    build:
+      context: ./entry
+    container_name: ovpn-tunnel-entry
+    ports:
+      - "2222:22"
+      - "8443:8443"
+    environment:
+      ROOT_PASSWORD: root
+    networks:
+      tunnelnet:
+        ipv4_address: 10.99.0.2
+
+networks:
+  tunnelnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.99.0.0/24

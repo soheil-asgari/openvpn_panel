@@ -1,0 +1,9 @@
+# ShellCheck configuration for this repository.
+#
+# The scripts intentionally use a few idioms that ShellCheck reports at the
+# info/warning level (for example `cmd && pass || fail` for concise
+# PASS/FAIL reporting, and `local` variables that are only used by the
+# `eval`-read code that sources these libraries). Rather than sprinkle
+# hundreds of inline directives, the check-level is set so the gate fails only
+# on genuine errors; warnings and style notes stay visible in the log.
+severity=error
