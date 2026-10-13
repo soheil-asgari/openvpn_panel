@@ -22,6 +22,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Surface the exact source location and command on any unhandled failure.
 trap 'ovpn_on_err' ERR
 
+# First install (no prior install marker) => full rollback of units/files this
+# run created on fatal failure. Re-runs after a previous install never disable
+# pre-existing running services, only clean up what the re-run itself created.
+if [[ -f "${OVPN_SYSCONF}" || -f "${OVPN_PANEL_CONFIG_DIR}/panel.env" ]]; then
+  _OVPN_PANEL_FIRST_RUN=0
+else
+  _OVPN_PANEL_FIRST_RUN=1
+fi
+_OVPN_ROLLBACK_UNITS=()
+_OVPN_ROLLBACK_FILES=()
+
+ovpn_install_rollback() {
+  local rc=$?
+  if [[ ${rc} -ne 0 ]]; then
+    if [[ ${#_OVPN_ROLLBACK_UNITS[@]} -gt 0 || ${#_OVPN_ROLLBACK_FILES[@]} -gt 0 ]]; then
+      ovpn_log "install failed (exit ${rc}) — rolling back what was created"
+      ovpn_rollback_execute
+    else
+      ovpn_log "install failed (exit ${rc}) — nothing had been created yet, nothing to roll back"
+    fi
+  fi
+  return "${rc}"
+}
+trap 'ovpn_install_rollback' EXIT
+
 SRC_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # --- defaults ----------------------------------------------------------------
@@ -137,6 +162,14 @@ if [[ "${OVPN_INSTALL_DRY_RUN:-0}" -eq 1 ]]; then
   exit 0
 fi
 
+# --- environment auto-heal ----------------------------------------------------
+ovpn_log "Auto-healing environment issues"
+ovpn_ensure_ntp
+ovpn_load_kernel_modules
+if [[ "${OVPN_PKG}" == "apt" ]]; then
+  ovpn_wait_apt_locks
+fi
+
 # --- system packages ---------------------------------------------------------
 ovpn_log "Installing system packages"
 BASE_PKGS=(curl ca-certificates openssl iproute2)
@@ -153,28 +186,44 @@ ovpn_install_packages "${BASE_PKGS[@]}"
 # --- OpenVPN core ------------------------------------------------------------
 if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
   install -d -m 0755 /etc/openvpn /etc/openvpn/server
+  # Track the PKI dir for first-install rollback — but only when no valid CA
+  # exists yet, so a pre-existing CA is NEVER wiped.
+  if [[ ! -f "${OVPN_PKI_DIR}/ca.crt" ]]; then
+    ovpn_rollback_mark_dir "${OVPN_PKI_DIR}"
+  fi
   ovpn_generate_pki
+  # tls-crypt is REQUIRED by the generated configs — fatal on failure.
   ovpn_generate_tls_crypt
+  ovpn_rollback_mark_file "${OVPN_PKI_DIR}/tls-crypt.key"
 
   ovpn_log "Configuring OpenVPN instances"
-  # First pass: create every instance.
+  # First pass: create/reuse every instance. Missing *incomplete* parts of an
+  # existing instance are rebuilt; existing configs are reused.
   IFS=',' read -ra _instances <<<"${INSTANCES_SPEC:-server:udp:1194:10.8.0.0/24}"
   for spec in "${_instances[@]}"; do
     [[ -n "${spec}" ]] || continue
     IFS=':' read -r iname iproto iport isubnet <<<"${spec}"
     iname="${iname:-server}"; iproto="${iproto:-udp}"
     iport="${iport:-1194}"; isubnet="${isubnet:-10.8.0.0/24}"
-    ovpn_instance_write "${iname}" "${iproto}" "${iport}" "${isubnet}" \
-      "${DEFAULT_DNS}" "${DEFAULT_MTU}" ""
+    if [[ -f "$(ovpn_instance_conf_path "${iname}")" && -f "$(ovpn_instance_meta_path "${iname}")" ]]; then
+      ovpn_ok "instance ${iname} already present — reusing"
+    else
+      ovpn_instance_write "${iname}" "${iproto}" "${iport}" "${isubnet}" \
+        "${DEFAULT_DNS}" "${DEFAULT_MTU}" ""
+      ovpn_rollback_mark_file "$(ovpn_instance_conf_path "${iname}")"
+      ovpn_rollback_mark_file "$(ovpn_instance_meta_path "${iname}")"
+    fi
   done
 
   ovpn_enable_ip_forward
   ovpn_install_nat_helper
+  ovpn_rollback_mark_service ovpn-panel-nat.service
 
   # Second pass: start services now that NAT helper + PKI exist.
   for spec in "${_instances[@]}"; do
     [[ -n "${spec}" ]] || continue
     IFS=':' read -r iname _ _ _ <<<"${spec}"
+    ovpn_rollback_mark_service "openvpn-server@${iname:-server}"
     ovpn_instance_enable "${iname:-server}"
   done
 
@@ -194,9 +243,17 @@ if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
 fi
 
 # --- Panel -------------------------------------------------------------------
-ovpn_panel_install_app "${SRC_DIR}"
+if [[ ! -d "${OVPN_PANEL_DIR}/.venv" ]]; then
+  ovpn_panel_install_app "${SRC_DIR}"
+  ovpn_rollback_mark_dir "${OVPN_PANEL_DIR}"
+else
+  ovpn_ok "panel app already installed at ${OVPN_PANEL_DIR} — reusing"
+  # Keep the app files in sync on a re-run.
+  ovpn_panel_install_app "${SRC_DIR}"
+fi
 ovpn_panel_generate_secrets
-ovpn_log "Initialising database"
+ovpn_rollback_mark_file "${OVPN_PANEL_CONFIG_DIR}/panel.env"
+ovpn_log "Initialising database"            # idempotent — FATAL on failure
 OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
   "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli init-db
 
@@ -216,19 +273,38 @@ install -m 0640 /dev/null "${OVPN_SYSCONF}" 2>/dev/null || true
   printf 'OVPN_INSTALL_OPENVPN=%s\n' "${INSTALL_OPENVPN}"
 } >"${OVPN_SYSCONF}"
 chmod 0640 "${OVPN_SYSCONF}"
+ovpn_rollback_mark_file "${OVPN_SYSCONF}"
 
 ovpn_panel_install_units
+ovpn_rollback_mark_service ovpn-panel-helper.service
+ovpn_rollback_mark_service ovpn-panel.service
+ovpn_rollback_mark_file /etc/systemd/system/ovpn-panel.service
+ovpn_rollback_mark_file /etc/systemd/system/ovpn-panel-helper.service
+ovpn_rollback_mark_file /etc/systemd/system/ovpn-panel-agent.service
+ovpn_rollback_mark_file /etc/systemd/system/ovpn-panel-agent@.service
 ovpn_panel_install_cli
 
 ovpn_log "Creating admin account"
-ADMIN_OUT="$(OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
-  "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli create-admin "${ADMIN_USER}" \
-  --password "${ADMIN_PASSWORD}" 2>&1 || true)"
-printf '%s\n' "${ADMIN_OUT}"
+# create-admin fails if the user already exists (re-run) — reset the password
+# instead so the re-run succeeds while keeping user data.
+ADMIN_OUT="$(
+  OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
+    "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli create-admin "${ADMIN_USER}" \
+    --password "${ADMIN_PASSWORD}" 2>&1
+)"
+if [[ "${ADMIN_OUT}" == *"already exists"* ]]; then
+  ovpn_ok "admin '${ADMIN_USER}' already exists — resetting password"
+  OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
+    "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli reset-password "${ADMIN_USER}" \
+    --password "${ADMIN_PASSWORD}"
+else
+  printf '%s\n' "${ADMIN_OUT}"
+fi
 
 # Persist credentials (mode 600) and show every access detail once at the end.
 ovpn_panel_write_credentials "${ADMIN_USER}" "${ADMIN_PASSWORD}" \
   "${PANEL_PORT}" "${PANEL_HOST}"
+ovpn_rollback_mark_file "${OVPN_PANEL_CONFIG_DIR}/credentials.txt"
 ovpn_panel_print_access "${ADMIN_PASSWORD}"
 if [[ "${ADMIN_PASSWORD_GENERATED}" -eq 1 && "${ADMIN_PASSWORD_FLAG}" -eq 0 ]]; then
   ovpn_warn "A strong random admin password was generated; it is shown above ONCE."

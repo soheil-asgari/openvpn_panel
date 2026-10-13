@@ -1,0 +1,362 @@
+# End-to-end installer test.
+#
+# Runs the FULL released installer (built locally with a fake tag) on a real
+# Ubuntu VM: installs, verifies the panel + OpenVPN service, creates a VPN user
+# through the REST API, generates a .ovpn, re-runs the installer (idempotency),
+# injects a failure on a FRESH machine (rollback + no half-installed units, then
+# self-healing re-run), and finally uninstalls. On any failure the installer log
+# and journal excerpts are uploaded as artifacts.
+#
+# Steps that cannot work on GitHub-hosted runners (no /dev/net/tun, no kernel
+# NAT hooks) are SKIPPED with an explicit log line, not the whole job.
+#
+# The test seam RELEASE_BASE=file://... is env-gated and documented in
+# scripts/release/install-template.sh.
+name: Installer E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  install-e2e:
+    name: install-e2e (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release artifacts (fake tag)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq shellcheck
+          scripts/release/build-release.sh "v0.0.0-e2e"
+
+      - name: Run installer (non-interactive, strong password, empty domain)
+        id: install
+        shell: bash
+        run: |
+          set +e
+          PW='E2e-Strong!Passw0rd-2026'
+          printf '%s' "${PW}" > /tmp/e2e-pw
+          RELEASE_BASE=file://"${GITHUB_WORKSPACE}"/dist \
+            sudo --preserve-env=RELEASE_BASE bash dist/install.sh \
+              --yes \
+              --admin-user admin \
+              --admin-password "${PW}" \
+              --panel-port 8080 \
+              --domain "" \
+              2>&1 | tee /tmp/e2e-install.log
+          rc=${PIPESTATUS[0]}
+          echo "install_rc=${rc}" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Assert installer exited 0 and services are up
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "install rc = ${install_rc:-unknown}"
+          if [[ "${install_rc:-1}" -ne 0 ]]; then
+            echo "::error::installer exited non-zero"
+            tail -n 80 /tmp/e2e-install.log || true
+            exit 1
+          fi
+          # openvpn-server@server active — the core rc3 bug this fixes.
+          systemctl is-active --quiet openvpn-server@server \
+            && echo "PASS: openvpn-server@server active" \
+            || { echo "::error::openvpn-server@server not active"; systemctl status --no-pager -l openvpn-server@server || true; exit 1; }
+          systemctl is-active --quiet ovpn-panel.service \
+            && echo "PASS: ovpn-panel.service active" \
+            || { echo "::error::ovpn-panel.service not active"; exit 1; }
+          systemctl is-active --quiet ovpn-panel-helper.service \
+            && echo "PASS: ovpn-panel-helper.service active" || true
+
+      - name: Assert panel answers on its port (login page)
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8080/login || true)"
+          echo "login page HTTP ${code}"
+          [[ "${code}" == "200" || "${code}" == "302" ]] \
+            && echo "PASS: panel answers on 8080 (HTTP ${code})" \
+            || { echo "::error::panel did not answer on 8080 (got ${code})"; exit 1; }
+
+      - name: Assert credentials file exists with mode 600
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -f /etc/ovpn-panel/credentials.txt ]] \
+            && echo "PASS: credentials.txt exists" \
+            || { echo "::error::credentials.txt missing"; exit 1; }
+          mode="$(stat -c '%a' /etc/ovpn-panel/credentials.txt)"
+          [[ "${mode}" == "600" ]] \
+            && echo "PASS: credentials.txt mode 600" \
+            || { echo "::error::credentials.txt mode is ${mode} (want 600)"; exit 1; }
+
+      - name: Create a VPN user via the REST API and generate a .ovpn
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PW="$(cat /tmp/e2e-pw)"
+          # Create a scoped admin API key directly in the DB (the API key is the
+          # credential used below to hit the API surface under test).
+          API_KEY="$(OVPN_PANEL_CONFIG_DIR=/etc/ovpn-panel /opt/ovpn-panel/.venv/bin/python - <<'PY'
+          from sqlalchemy import select
+          from app.db import session_scope
+          from app.models.user import User, Role
+          from app.services import api_keys as keys
+
+          with session_scope() as db:
+              admin = db.scalar(select(User).where(User.username == "admin"))
+              assert admin is not None and admin.role == Role.ADMIN, "admin not found"
+              key, raw = keys.create_key(db, admin, name="e2e")
+              db.commit()
+              print(raw)
+          PY
+          )"
+          [[ -n "${API_KEY}" ]] || { echo "::error::API key creation returned empty"; exit 1; }
+
+          # Create user through the actual REST endpoint (the surface under test).
+          code="$(curl -s -o /tmp/e2e-create.json -w '%{http_code}' \
+            -X POST http://127.0.0.1:8080/api/v1/users \
+            -H "Authorization: Bearer ${API_KEY}" \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"e2euser","password":"User!Passw0rd-2026","common_name":"e2euser"}')"
+          echo "POST /api/v1/users -> HTTP ${code}"
+          [[ "${code}" == "201" ]] || { echo "::error::user creation failed: $(cat /tmp/e2e-create.json)"; exit 1; }
+          USER_ID="$(python3 -c "import json,sys; print(json.load(open('/tmp/e2e-create.json'))['id'])")"
+          echo "PASS: user created via API (id=${USER_ID})"
+
+          # Generate the .ovpn through the subscription endpoint.
+          TOKEN="$(OVPN_PANEL_CONFIG_DIR=/etc/ovpn-panel /opt/ovpn-panel/.venv/bin/python - <<'PY'
+          from sqlalchemy import select
+          from app.db import session_scope
+          from app.models.vpn_user import VpnUser
+          with session_scope() as db:
+              u = db.scalar(select(VpnUser).where(VpnUser.username == "e2euser"))
+              print(u.subscription_token if u else "")
+          PY
+          )"
+          [[ -n "${TOKEN}" ]] || { echo "::error::no subscription token"; exit 1; }
+          # Node id 1 is the first (and, on a single-node install, only) node.
+          code="$(curl -s -o /tmp/e2euser.ovpn -w '%{http_code}' \
+            "http://127.0.0.1:8080/sub/${TOKEN}/config/1.ovpn" || true)"
+          echo "GET subscription config -> HTTP ${code}"
+          grep -q '^client' /tmp/e2euser.ovpn \
+            && echo "PASS: .ovpn generated (client line present)" \
+            || { echo "::error::.ovpn not generated (HTTP ${code})"; exit 1; }
+          grep -q '^remote ' /tmp/e2euser.ovpn && echo "PASS: .ovpn has a remote line" || true
+          wc -l /tmp/e2euser.ovpn
+
+      - name: Re-run installer (idempotency)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          PW="$(cat /tmp/e2e-pw)"
+          RELEASE_BASE=file://"${GITHUB_WORKSPACE}"/dist \
+            sudo --preserve-env=RELEASE_BASE bash dist/install.sh \
+              --yes \
+              --admin-user admin \
+              --admin-password "${PW}" \
+              --panel-port 8080 \
+              --domain "" \
+              2>&1 | tee /tmp/e2e-reinstall.log
+          rc=${PIPESTATUS[0]}
+          echo "reinstall_rc=${rc}" >> "$GITHUB_ENV"
+          if [[ "${rc}" -ne 0 ]]; then
+            echo "::error::second install (idempotency) failed rc=${rc}"
+            tail -n 80 /tmp/e2e-reinstall.log || true
+            exit 1
+          fi
+          echo "PASS: second install exited 0 (idempotent)"
+          systemctl is-active --quiet ovpn-panel.service \
+            && echo "PASS: panel still active after re-run" \
+            || { echo "::error::panel not active after re-run"; exit 1; }
+          echo "PASS: re-run did not disturb services"
+
+      - name: Run install.sh uninstall (assert services and files are gone)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo bash dist/install.sh uninstall --purge --yes 2>&1 | tee /tmp/e2e-uninstall.log
+          systemctl is-active --quiet ovpn-panel.service \
+            && { echo "::error::panel still active after uninstall"; exit 1; } || true
+          systemctl is-active --quiet ovpn-panel-helper.service \
+            && { echo "::error::helper still active after uninstall"; exit 1; } || true
+          systemctl is-active --quiet openvpn-server@server \
+            && { echo "::error::openvpn still active after uninstall"; exit 1; } || true
+          [[ ! -e /opt/ovpn-panel ]] \
+            && echo "PASS: /opt/ovpn-panel removed" \
+            || { echo "::error::/opt/ovpn-panel remains"; exit 1; }
+          [[ ! -e /etc/openvpn/pki ]] \
+            && echo "PASS: PKI removed" \
+            || { echo "::error::PKI remains"; exit 1; }
+          [[ ! -e /etc/ovpn-panel/credentials.txt ]] \
+            && echo "PASS: credentials removed" \
+            || { echo "::error::credentials remain"; exit 1; }
+          echo "PASS: uninstall clean"
+
+      - name: Print skipped steps summary
+        if: always()
+        shell: bash
+        run: |
+          echo "Skipped on hosted runners (logged, not asserted):"
+          echo "  - live VPN tunnel test (no /dev/net/tun on GitHub-hosted runners)"
+          echo "  - NAT masquerade reachability test (no kernel NAT hooks available)"
+
+      - name: Upload install logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-e2e-${{ matrix.os }}-logs
+          path: |
+            /tmp/e2e-install.log
+            /tmp/e2e-reinstall.log
+            /tmp/e2e-uninstall.log
+            /var/log/ovpn-panel-install.log
+            /etc/ovpn-panel/install.conf
+          if-no-files-found: ignore
+
+  install-e2e-failinject:
+    # Failure-injection on a FRESH machine: the first install must FAIL with a
+    # clear error, roll back everything it created (no half-installed units,
+    # no partial /opt/ovpn-panel, no hacker CA), and a re-run with a healthy
+    # easyrsa must then complete — proving self-healing / idempotency of a
+    # failed first run.
+    name: install-e2e failinject (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release artifacts (fake tag)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq shellcheck
+          scripts/release/build-release.sh "v0.0.0-e2e"
+
+      - name: Break easyrsa before install (first-run failure injection)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo cp /usr/share/easy-rsa/easyrsa /usr/share/easy-rsa/easyrsa.e2e-bak
+          printf '#!/usr/bin/env bash\necho "e2e forced failure" >&2\nexit 3\n' | \
+            sudo tee /usr/share/easy-rsa/easyrsa >/dev/null
+          sudo chmod 0755 /usr/share/easy-rsa/easyrsa
+
+      - name: First install must fail with a clear error
+        shell: bash
+        run: |
+          set +e
+          PW='E2e-Strong!Passw0rd-2026'
+          printf '%s' "${PW}" > /tmp/e2e-pw
+          RELEASE_BASE=file://"${GITHUB_WORKSPACE}"/dist \
+            sudo --preserve-env=RELEASE_BASE bash dist/install.sh \
+              --yes \
+              --admin-user admin \
+              --admin-password "${PW}" \
+              --panel-port 8080 \
+              --domain "" \
+              2>&1 | tee /tmp/e2e-failinject.log
+          rc=${PIPESTATUS[0]}
+          echo "failinject_rc=${rc}" >> "$GITHUB_ENV"
+          if [[ "${rc}" -eq 0 ]]; then
+            echo "::error::installer unexpectedly succeeded with easyrsa broken"
+            exit 1
+          fi
+          echo "PASS: installer failed (rc=${rc}) as expected"
+          grep -qi 'error' /tmp/e2e-failinject.log \
+            && echo "PASS: clear error in log" \
+            || echo "warn: no 'error' line found in failure-injection log"
+
+      - name: Assert rollback left no half-installed units or partial files
+        shell: bash
+        run: |
+          set -euo pipefail
+          leftover=""
+          systemctl list-units --all --no-legend 'ovpn-panel*.service' 2>/dev/null | grep -q '.' \
+            && leftover="panel units present"
+          systemctl list-units --all --no-legend 'openvpn-server@*.service' 2>/dev/null | grep -q '.' \
+            && leftover="${leftover:+${leftover}; }openvpn units present"
+          if [[ -n "${leftover}" ]]; then
+            echo "::error::leftover units after failed first install: ${leftover}"
+            exit 1
+          fi
+          echo "PASS: no units survive the failed first install"
+          # Rollback must have removed every file the failed run created.
+          [[ ! -e /opt/ovpn-panel ]] \
+            && echo "PASS: no partial /opt/ovpn-panel" \
+            || { echo "::error::partial /opt/ovpn-panel survived rollback"; exit 1; }
+          [[ ! -e /etc/openvpn/pki/ca.crt ]] \
+            && echo "PASS: no CA created by failed run" \
+            || { echo "::error::hacker CA survived rollback"; exit 1; }
+          [[ ! -f /etc/systemd/system/ovpn-panel.service ]] \
+            && echo "PASS: no panel unit file left behind" \
+            || { echo "::error::unit file survived rollback"; exit 1; }
+
+      - name: Restore easyrsa and re-run — self-healing must succeed
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo mv /usr/share/easy-rsa/easyrsa.e2e-bak /usr/share/easy-rsa/easyrsa 2>/dev/null || true
+          PW="$(cat /tmp/e2e-pw)"
+          RELEASE_BASE=file://"${GITHUB_WORKSPACE}"/dist \
+            sudo --preserve-env=RELEASE_BASE bash dist/install.sh \
+              --yes \
+              --admin-user admin \
+              --admin-password "${PW}" \
+              --panel-port 8080 \
+              --domain "" \
+              2>&1 | tee /tmp/e2e-recover.log
+          rc=${PIPESTATUS[0]}
+          echo "recover_rc=${rc}" >> "$GITHUB_ENV"
+          if [[ "${rc}" -ne 0 ]]; then
+            echo "::error::installer could not recover after failed first run (rc=${rc})"
+            tail -n 80 /tmp/e2e-recover.log || true
+            exit 1
+          fi
+          echo "PASS: installer self-healed a failed first run (re-run rc=0)"
+          systemctl is-active --quiet ovpn-panel.service \
+            && echo "PASS: panel active after self-healing re-run" \
+            || { echo "::error::panel not active after recovery"; exit 1; }
+          systemctl is-active --quiet openvpn-server@server \
+            && echo "PASS: openvpn active after self-healing re-run" \
+            || { echo "::error::openvpn not active after recovery"; exit 1; }
+
+      - name: Upload failure-injection logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-e2e-failinject-${{ matrix.os }}-logs
+          path: |
+            /tmp/e2e-failinject.log
+            /tmp/e2e-recover.log
+            /var/log/ovpn-panel-install.log
+            /etc/ovpn-panel/install.conf
+          if-no-files-found: ignore

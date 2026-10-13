@@ -193,6 +193,17 @@ ovpn_panel_install_units() {
   install -m 0644 "${OVPN_PANEL_DIR}/scripts/systemd/ovpn-panel-agent@.service" /etc/systemd/system/
   ovpn_panel_render_unit_port "$(ovpn_panel_get_port)"
   systemctl daemon-reload
-  systemctl enable --now ovpn-panel-helper.service
-  systemctl enable --now ovpn-panel.service
+  # Required steps — failing to start the panel is FATAL.
+  systemctl enable --now ovpn-panel-helper.service || {
+    local rc=$?
+    systemctl status --no-pager -l ovpn-panel-helper.service 2>&1 || true
+    journalctl --no-pager -n 30 -u ovpn-panel-helper.service 2>&1 || true
+    ovpn_die "ovpn-panel-helper.service failed to start (exit ${rc})"
+  }
+  systemctl enable --now ovpn-panel.service || {
+    local rc=$?
+    systemctl status --no-pager -l ovpn-panel.service 2>&1 || true
+    journalctl --no-pager -n 30 -u ovpn-panel.service 2>&1 || true
+    ovpn_die "ovpn-panel.service failed to start (exit ${rc})"
+  }
 }

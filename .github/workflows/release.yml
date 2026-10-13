@@ -10,8 +10,16 @@ permissions:
   contents: write
 
 jobs:
+  # A broken installer must never be published again: the release is blocked
+  # until the end-to-end installer test passes on both supported Ubuntu LTS
+  # releases.
+  installer-e2e-gate:
+    uses: ./.github/workflows/install-e2e.yml
+    secrets: inherit
+
   build-and-publish:
     runs-on: ubuntu-22.04
+    needs: installer-e2e-gate
     steps:
       - uses: actions/checkout@v4
         with:

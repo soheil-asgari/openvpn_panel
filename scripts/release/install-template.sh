@@ -136,7 +136,7 @@ preflight() {
   ok "DNS resolves"
   if command -v timedatectl >/dev/null 2>&1; then
     timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -q yes \
-      || warn "system clock is not NTP-synchronised; TLS verification may fail"
+      || { warn "system clock is not NTP-synchronised; enabling NTP"; timedatectl set-ntp true 2>/dev/null || true; }
   fi
 }
 
@@ -292,10 +292,24 @@ download_and_verify() {
   case "${base}" in
     */main/*|*/master/*) die "refusing to install from a mutable branch: ${base}" ;;
   esac
-  curl -fsSL --max-time 120 -o "${TMP_DIR}/${TARBALL}" "${base}/${TARBALL}" \
-    || die "download failed: ${base}/${TARBALL}"
-  curl -fsSL --max-time 60  -o "${TMP_DIR}/SHA256SUMS" "${base}/SHA256SUMS" \
-    || die "download failed: ${base}/SHA256SUMS"
+
+  if [[ "${base}" == file://* ]]; then
+    # TEST SEAM (env-gated, OVPN_RELEASE_BASE only): serve the release from a
+    # local directory. Used by CI to test the unmodified released installer
+    # against freshly built artifacts; never reachable in production.
+    local dir="${base#file://}"
+    [[ -d "${dir}" ]] || die "local release dir missing: ${dir}"
+    local real_dir; real_dir="$(cd "${dir}" && pwd)"
+    cp -f "${real_dir}/${TARBALL}" "${TMP_DIR}/${TARBALL}" \
+      || die "local tarball missing: ${real_dir}/${TARBALL}"
+    cp -f "${real_dir}/SHA256SUMS" "${TMP_DIR}/SHA256SUMS" \
+      || die "local checksums missing: ${real_dir}/SHA256SUMS"
+  else
+    curl -fsSL --max-time 120 -o "${TMP_DIR}/${TARBALL}" "${base}/${TARBALL}" \
+      || die "download failed: ${base}/${TARBALL}"
+    curl -fsSL --max-time 60  -o "${TMP_DIR}/SHA256SUMS" "${base}/SHA256SUMS" \
+      || die "download failed: ${base}/SHA256SUMS"
+  fi
 
   local expected actual
   expected="$(grep -E "[[:space:]]${TARBALL}\$" "${TMP_DIR}/SHA256SUMS" | awk '{print $1}')"
@@ -463,6 +477,14 @@ do_uninstall() {
   for u in "${SLUG}.service" "${SLUG}-helper.service" "${SLUG}-agent.service" "${SLUG}-agent@.service" "${SLUG}-nat.service"; do
     systemctl disable --now "${u}" 2>/dev/null || true
   done
+  # Stop and disable every OpenVPN instance created by the installer.
+  local _meta _inst
+  for _meta in /etc/openvpn/instances/*.env; do
+    [[ -f "${_meta}" ]] || continue
+    # shellcheck disable=SC1090
+    _inst="$( . "${_meta}"; printf '%s' "${OVPN_INSTANCE_NAME:-}" )"
+    [[ -n "${_inst}" ]] && systemctl disable --now "openvpn-server@${_inst}" 2>/dev/null || true
+  done
   rm -f "/etc/systemd/system/${SLUG}.service" \
         "/etc/systemd/system/${SLUG}-helper.service" \
         "/etc/systemd/system/${SLUG}-agent.service" \
@@ -474,6 +496,8 @@ do_uninstall() {
   if [[ "${purge}" -eq 1 ]]; then
     warn "purging data and configuration"
     rm -rf "${CONFIG_DIR}" "/var/lib/${SLUG}" "/var/backups/${SLUG}"
+    rm -rf /etc/openvpn/pki /etc/openvpn/instances /etc/openvpn/ccd /etc/openvpn/clients
+    rm -f /etc/sysctl.d/99-${SLUG}.conf 2>/dev/null || true
     userdel "${SERVICE_USER}" 2>/dev/null || true
   else
     warn "kept ${CONFIG_DIR} and /var/lib/${SLUG} (use --purge to delete)"

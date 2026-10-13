@@ -8,6 +8,12 @@
 # every operation is idempotent. No external secrets are embedded here and no
 # license/telemetry logic exists by design.
 #
+# Incomplete installations (partial PKI, instances, units) ARE detected and
+# repaired — the library NEVER wipes a valid CA or user data.
+#
+# Every required step is FATAL on failure, never hidden behind || warn / || true.
+# For first-install rollback see the rollback helpers at the bottom.
+#
 set -Eeuo pipefail
 
 # --- Paths & constants -------------------------------------------------------
@@ -306,8 +312,38 @@ EOF
 
 ovpn_instance_enable() {
   local name="$1"
+  # Validate that every file referenced by the generated config exists and is
+  # readable BEFORE attempting to start the service.
+  local conf; conf="$(ovpn_instance_conf_path "${name}")"
+  if [[ ! -f "${conf}" ]]; then
+    ovpn_die "instance config ${conf} is missing — cannot enable"
+  fi
+  # Extract file paths referenced in the config and check them.
+  local refs
+  refs="$(grep -oE '^\s*(ca|cert|key|dh|tls-crypt|tls-auth)\s+\S+' "${conf}" 2>/dev/null || true)"
+  if [[ -n "${refs}" ]]; then
+    while IFS=' ' read -r directive path; do
+      [[ -n "${path}" ]] || continue
+      # Strip quotes if present.
+      path="${path%\"}"; path="${path#\"}"
+      if [[ ! -f "${path}" ]]; then
+        ovpn_die "config ${name} references missing file '${path}' (directive: ${directive})"
+      fi
+      if [[ ! -r "${path}" ]]; then
+        ovpn_die "config ${name} references unreadable file '${path}' (directive: ${directive})"
+      fi
+    done <<<"${refs}"
+  fi
+  ovpn_ok "config ${name} — all referenced files exist and are readable"
+
   systemctl enable "openvpn-server@${name}" >/dev/null 2>&1 || true
-  systemctl restart "openvpn-server@${name}"
+  systemctl restart "openvpn-server@${name}" || {
+    local rc=$?
+    ovpn_log "openvpn-server@${name} failed to start — collecting diagnostics"
+    systemctl status --no-pager -l "openvpn-server@${name}" 2>&1 || true
+    journalctl --no-pager -n 30 -u "openvpn-server@${name}" 2>&1 || true
+    ovpn_die "openvpn-server@${name} failed to start (exit ${rc}); likely cause: a syntax error in the generated config, a missing TLS key, or a port conflict"
+  }
   ovpn_ok "service openvpn-server@${name} started"
 }
 
@@ -356,17 +392,26 @@ ovpn_easyrsa() {
 
 ovpn_generate_pki_easyrsa() {
   ovpn_log "Generating PKI with easy-rsa"
-  install -d -m 0700 "${OVPN_PKI_DIR}"
   if [[ ! -f "${OVPN_PKI_DIR}/ca.crt" ]]; then
+    # No valid CA present: remove any half-written PKI (there is nothing valid
+    # to preserve) and rebuild from scratch. A valid CA is NEVER wiped.
+    if [[ -d "${OVPN_PKI_DIR}" ]]; then
+      ovpn_warn "incomplete PKI found without a CA in ${OVPN_PKI_DIR} — rebuilding it"
+      rm -rf "${OVPN_PKI_DIR}"
+    fi
+    install -d -m 0700 "${OVPN_PKI_DIR}"
     ovpn_easyrsa init-pki
     EASYRSA_REQ_CN="ovpn-panel-ca" ovpn_easyrsa build-ca nopass
+    ovpn_ok "CA created"
   else
     ovpn_ok "existing CA kept"
   fi
   if [[ ! -f "${OVPN_PKI_DIR}/issued/server.crt" ]]; then
     ovpn_easyrsa build-server-full server nopass
+    ovpn_ok "server certificate issued"
   fi
-  ovpn_easyrsa gen-crl || ovpn_warn "gen-crl failed (continuing)"
+  # CRL is required for certificate revocation — a failure here is FATAL.
+  ovpn_easyrsa gen-crl
 }
 
 ovpn_generate_pki_openssl() {
@@ -408,12 +453,11 @@ ovpn_generate_tls_crypt() {
     return 0
   fi
   ovpn_log "Generating tls-crypt key"
-  if [[ -x "${EASYRSA_BIN}" ]] && ovpn_easyrsa gen-tls-crypt-key; then
-    : # easy-rsa >= 3.1 writes the key itself
-  else
-    openvpn --genkey secret "${OVPN_PKI_DIR}/tls-crypt.key"
-  fi
+  # easy-rsa does NOT have a gen-tls-crypt-key subcommand; always use
+  # the OpenVPN binary directly with an absolute path.
+  "${OPENVPN_BIN}" --genkey secret "${OVPN_PKI_DIR}/tls-crypt.key"
   chmod 0600 "${OVPN_PKI_DIR}/tls-crypt.key"
+  ovpn_ok "tls-crypt key written to ${OVPN_PKI_DIR}/tls-crypt.key"
 }
 
 # --- NAT / firewall ----------------------------------------------------------
@@ -484,8 +528,8 @@ EOF
 
 ovpn_apply_nat() {
   [[ -x "$(ovpn_nat_script)" ]] || ovpn_install_nat_helper
-  "$(ovpn_nat_script)" || ovpn_warn "failed to apply NAT rules"
-  systemctl restart ovpn-panel-nat.service 2>/dev/null || true
+  "$(ovpn_nat_script)"  # FATAL — NAT is required for routing
+  systemctl restart ovpn-panel-nat.service
 }
 
 ovpn_persist_nftables() {
@@ -577,4 +621,90 @@ EOF
   cp -f "${OVPN_PANEL_CONFIG_DIR}/client.ovpn.template" \
         "${OVPN_CLIENT_DIR}/client.ovpn.example" 2>/dev/null || true
   ovpn_ok "wrote client template to ${OVPN_PANEL_CONFIG_DIR}/client.ovpn.template"
+}
+
+# --- first-install rollback --------------------------------------------------
+# Track systemd units enabled/started and files written during THIS install so a
+# fatal failure on a FIRST install can undo them cleanly (never touches a
+# pre-existing valid CA or user data). update.sh/repair disable this tracking.
+
+_OVPN_ROLLBACK_UNITS=()
+_OVPN_ROLLBACK_FILES=()
+# install.sh decides first-run semantics from the install marker before
+# sourcing; keep that decision (default 1 = genuine first install).
+_OVPN_PANEL_FIRST_RUN="${_OVPN_PANEL_FIRST_RUN:-1}"
+
+ovpn_rollback_mark_service() {
+  [[ "${_OVPN_PANEL_FIRST_RUN}" -eq 1 ]] || return 0
+  local unit="$1"
+  _OVPN_ROLLBACK_UNITS+=("${unit}")
+}
+
+ovpn_rollback_mark_file() {
+  [[ "${_OVPN_PANEL_FIRST_RUN}" -eq 1 ]] || return 0
+  local path="$1"
+  _OVPN_ROLLBACK_FILES+=("${path}")
+}
+
+ovpn_rollback_mark_dir() {
+  [[ "${_OVPN_PANEL_FIRST_RUN}" -eq 1 ]] || return 0
+  local dir="$1"
+  _OVPN_ROLLBACK_FILES+=("${dir}")
+}
+
+ovpn_rollback_execute() {
+  # Undo every recorded action. Idempotent — safe to call multiple times.
+  [[ ${#_OVPN_ROLLBACK_UNITS[@]} -gt 0 || ${#_OVPN_ROLLBACK_FILES[@]} -gt 0 ]] || return 0
+  local u f
+  ovpn_log "Rolling back partial install (first-install failure)"
+  for u in "${_OVPN_ROLLBACK_UNITS[@]}"; do
+    systemctl disable --now "${u}" >/dev/null 2>&1 || true
+    ovpn_log "  rolled back unit: ${u}"
+  done
+  for f in "${_OVPN_ROLLBACK_FILES[@]}"; do
+    rm -rf "${f}" 2>/dev/null || true
+    ovpn_log "  removed: ${f}"
+  done
+  _OVPN_ROLLBACK_UNITS=()
+  _OVPN_ROLLBACK_FILES=()
+  ovpn_log "Rollback complete"
+}
+
+# --- environment auto-heal ----------------------------------------------------
+
+ovpn_ensure_ntp() {
+  # clock not synchronised => enable NTP instead of only warning.
+  command -v timedatectl >/dev/null 2>&1 || return 0
+  local synced
+  synced="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)"
+  if [[ "${synced}" != "yes" ]]; then
+    ovpn_log "System clock not NTP-synchronised — enabling NTP"
+    timedatectl set-ntp true >/dev/null 2>&1 \
+      || ovpn_warn "timedatectl set-ntp true failed (clock may still be off)"
+    sleep 2
+  fi
+}
+
+ovpn_load_kernel_modules() {
+  local m
+  for m in tun wireguard; do
+    if modprobe -q "${m}" 2>/dev/null; then
+      ovpn_ok "kernel module '${m}' loaded"
+    else
+      ovpn_warn "kernel module '${m}' unavailable (may need VPS feature enable)"
+    fi
+  done
+}
+
+ovpn_wait_apt_locks() {
+  local i=0
+  while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
+    i=$((i+1))
+    if [[ "${i}" -ge 36 ]]; then
+      ovpn_warn "apt lock still held after 180s — continuing"
+      break
+    fi
+    ovpn_log "Waiting for apt lock ... (${i})"
+    sleep 5
+  done
 }

@@ -28,6 +28,32 @@ sudo ./scripts/install.sh --yes \
 Pass `--no-openvpn` to install only the web panel (no OpenVPN core, PKI or
 firewall changes).
 
+## Re-runs, self-healing and rollback
+
+The installer is **idempotent**: running it again on the same server reuses an
+existing valid CA, server certificate, running instances and the panel database,
+and never wipes user data. Incomplete parts (a PKI without a CA, a missing
+server certificate or CRL, a half-written instance or systemd unit) are detected
+and rebuilt automatically.
+
+On **first-install** failure the installer rolls back the units and files it
+created and prints what was rolled back; a second run then completes cleanly.
+`install.sh repair` and `install.sh uninstall [--purge]` remain supported.
+
+Known environment issues are fixed automatically instead of merely warned about:
+NTP is enabled when the clock is not synchronised, the `tun`/`wireguard` kernel
+modules are loaded, apt locks are waited on, and any active firewall (ufw,
+firewalld or nftables) has the chosen ports opened.
+
+## CI test seam (env-gated, for testing only)
+
+The released `install.sh` can pull the release artifacts from a local directory
+instead of GitHub via the `OVPN_RELEASE_BASE` environment variable using a
+`file://` URL (e.g. `OVPN_RELEASE_BASE=file:///path/to/dist`). This seam is only
+active when the variable is explicitly set, is never reachable in production,
+and is what the end-to-end workflow (`.github/workflows/install-e2e.yml`) uses to
+test the unmodified released installer against freshly built artifacts.
+
 ## What the installer does
 
 1. **System packages** — python3/venv/pip, openvpn, easy-rsa, nftables, sqlite3,
