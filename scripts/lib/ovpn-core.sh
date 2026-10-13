@@ -8,7 +8,7 @@
 # every operation is idempotent. No external secrets are embedded here and no
 # license/telemetry logic exists by design.
 #
-set -euo pipefail
+set -Eeuo pipefail
 
 # --- Paths & constants -------------------------------------------------------
 OVPN_PKI_DIR="${OVPN_PKI_DIR:-/etc/openvpn/pki}"
@@ -41,6 +41,18 @@ ovpn_log()  { printf "${_c_blue}==>${_c_reset} %s\n" "$*"; }
 ovpn_ok()   { printf "${_c_green}  ok${_c_reset} %s\n" "$*"; }
 ovpn_warn() { printf "${_c_yellow}warn:${_c_reset} %s\n" "$*" >&2; }
 ovpn_die()  { printf "${_c_red}error:${_c_reset} %s\n" "$*" >&2; exit 1; }
+
+# Report an unhandled command failure with its origin and the failing command,
+# instead of dying silently under `set -e`.
+ovpn_on_err() {
+  local rc=$?
+  printf "${_c_red}error:${_c_reset} %s:%s: command failed (exit %s): %s\n" \
+    "${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}" "${BASH_LINENO[0]:-?}" "${rc}" \
+    "${BASH_COMMAND}" >&2
+  return "${rc}"
+}
+# Enable errtrace (-E) so the trap is inherited by functions and subshells.
+trap 'ovpn_on_err' ERR
 
 ovpn_require_root() {
   [[ "${EUID}" -eq 0 ]] || ovpn_die "must run as root (try: sudo $0)"
@@ -320,22 +332,41 @@ ovpn_instance_list_subnets() {
 # --- PKI (CA + server + tls-crypt) -------------------------------------------
 ovpn_pki_ready() { [[ -f "${OVPN_PKI_DIR}/ca.crt" && -f "${OVPN_PKI_DIR}/issued/server.crt" ]]; }
 
+# Run easy-rsa with the PKI directory supplied through the EASYRSA_PKI
+# environment variable. easy-rsa 3.1.x rejects the space-separated
+# "--pki-dir <dir>" form ("Missing value to option: --pki-dir"); the value must
+# be attached with "=" (--pki-dir=<dir>) or passed via EASYRSA_PKI. Output is
+# NOT hidden: on failure the command, exit code and the last 20 lines are shown.
+ovpn_easyrsa() {
+  local -a envs=("EASYRSA_BATCH=1" "EASYRSA_PKI=${OVPN_PKI_DIR}")
+  [[ -n "${EASYRSA_REQ_CN:-}" ]] && envs+=("EASYRSA_REQ_CN=${EASYRSA_REQ_CN}")
+  local out rc=0
+  out="$(
+    trap - ERR
+    set +e
+    env "${envs[@]}" "${EASYRSA_BIN}" "$@" 2>&1
+  )" && rc=0 || rc=$?
+  if [[ "${rc}" -ne 0 ]]; then
+    ovpn_warn "easy-rsa failed (exit ${rc}): EASYRSA_PKI=${OVPN_PKI_DIR} ${EASYRSA_BIN} $*"
+    printf '%s\n' "${out}" | tail -n 20 >&2
+    return "${rc}"
+  fi
+  return 0
+}
+
 ovpn_generate_pki_easyrsa() {
   ovpn_log "Generating PKI with easy-rsa"
   install -d -m 0700 "${OVPN_PKI_DIR}"
   if [[ ! -f "${OVPN_PKI_DIR}/ca.crt" ]]; then
-    "${EASYRSA_BIN}" --batch --pki-dir "${OVPN_PKI_DIR}" init-pki >/dev/null
-    EASYRSA_REQ_CN="ovpn-panel-ca" \
-      "${EASYRSA_BIN}" --batch --pki-dir "${OVPN_PKI_DIR}" \
-      build-ca nopass >/dev/null
+    ovpn_easyrsa init-pki
+    EASYRSA_REQ_CN="ovpn-panel-ca" ovpn_easyrsa build-ca nopass
   else
     ovpn_ok "existing CA kept"
   fi
   if [[ ! -f "${OVPN_PKI_DIR}/issued/server.crt" ]]; then
-    "${EASYRSA_BIN}" --batch --pki-dir "${OVPN_PKI_DIR}" \
-      build-server-full server nopass >/dev/null
+    ovpn_easyrsa build-server-full server nopass
   fi
-  "${EASYRSA_BIN}" --batch --pki-dir "${OVPN_PKI_DIR}" gen-crl >/dev/null 2>&1 || true
+  ovpn_easyrsa gen-crl || ovpn_warn "gen-crl failed (continuing)"
 }
 
 ovpn_generate_pki_openssl() {
@@ -377,8 +408,7 @@ ovpn_generate_tls_crypt() {
     return 0
   fi
   ovpn_log "Generating tls-crypt key"
-  if [[ -x "${EASYRSA_BIN}" ]] && \
-     "${EASYRSA_BIN}" --batch --pki-dir "${OVPN_PKI_DIR}" gen-tls-crypt-key >/dev/null 2>&1; then
+  if [[ -x "${EASYRSA_BIN}" ]] && ovpn_easyrsa gen-tls-crypt-key; then
     : # easy-rsa >= 3.1 writes the key itself
   else
     openvpn --genkey secret "${OVPN_PKI_DIR}/tls-crypt.key"

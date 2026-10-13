@@ -7,6 +7,7 @@ ever assembled and the shell is always disabled.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import subprocess
@@ -99,19 +100,60 @@ def _run(argv: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]
     )
 
 
+def build_easyrsa_argv(*commands: str, pki_dir: Path = PKI_DIR) -> list[str]:
+    """Return an easy-rsa ``argv`` using the ``--opt=value`` form.
+
+    easy-rsa 3.1.x rejects space-separated option values such as
+    ``--pki-dir /etc/openvpn/pki`` ("Missing value to option: --pki-dir"); the
+    value must be attached with ``=``. The PKI directory is therefore passed as
+    ``--pki-dir=<dir>`` and batch mode as ``--batch``.
+    """
+
+    return [EASYRSA, "--batch", f"--pki-dir={pki_dir}", *commands]
+
+
+def build_easyrsa_env(pki_dir: Path = PKI_DIR) -> dict[str, str]:
+    """Environment for easy-rsa: batch mode + PKI directory via EASYRSA_PKI."""
+
+    env = dict(os.environ)
+    env["EASYRSA_BATCH"] = "1"
+    env["EASYRSA_PKI"] = str(pki_dir)
+    return env
+
+
+def _easyrsa(commands: list[str], timeout: int = 120) -> subprocess.CompletedProcess[str]:
+    """Run easy-rsa without hiding output and without requiring a TTY."""
+
+    return subprocess.run(  # noqa: S603 - argv list, shell disabled
+        build_easyrsa_argv(*commands),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+        env=build_easyrsa_env(),
+        stdin=subprocess.DEVNULL,
+    )
+
+
+def _easyrsa_error(proc: subprocess.CompletedProcess[str]) -> str:
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    tail = "\n".join(combined.strip().splitlines()[-20:])
+    cmd = " ".join(build_easyrsa_argv())
+    return f"easyrsa failed (exit {proc.returncode}): {cmd}\n{tail}".strip()
+
+
 def issue_client_certificate(common_name: str) -> ActionResult:
     try:
         cn = validate_common_name(common_name)
     except ValidationError as exc:
         return ActionResult(ok=False, error=str(exc))
 
-    argv = [EASYRSA, "--batch", "--pki-dir", str(PKI_DIR), "build-client-full", cn, "nopass"]
     try:
-        proc = _run(argv)
+        proc = _easyrsa(["build-client-full", cn, "nopass"])
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         return ActionResult(ok=False, error=f"easyrsa failed: {exc}")
     if proc.returncode != 0:
-        return ActionResult(ok=False, error=proc.stderr.strip() or "easyrsa error")
+        return ActionResult(ok=False, error=_easyrsa_error(proc))
 
     cert = PKI_DIR / "issued" / f"{cn}.crt"
     key = PKI_DIR / "private" / f"{cn}.key"
@@ -133,15 +175,14 @@ def revoke_client_certificate(common_name: str) -> ActionResult:
     except ValidationError as exc:
         return ActionResult(ok=False, error=str(exc))
 
-    argv = [EASYRSA, "--batch", "--pki-dir", str(PKI_DIR), "revoke", cn]
     try:
-        proc = _run(argv)
+        proc = _easyrsa(["revoke", cn])
         if proc.returncode == 0:
-            _run([EASYRSA, "--batch", "--pki-dir", str(PKI_DIR), "gen-crl"])
+            _easyrsa(["gen-crl"])
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         return ActionResult(ok=False, error=f"easyrsa failed: {exc}")
     if proc.returncode != 0:
-        return ActionResult(ok=False, error=proc.stderr.strip() or "easyrsa error")
+        return ActionResult(ok=False, error=_easyrsa_error(proc))
     return ActionResult(ok=True, data={"common_name": cn})
 
 

@@ -4,6 +4,12 @@
 # Panel-specific helpers shared by install.sh and the ovpn-panel CLI.
 # Sourced after scripts/lib/ovpn-core.sh.
 #
+# Guard against being executed directly (it is meant to be sourced after
+# ovpn-core.sh). Must NOT `exit`, as that would kill the sourcing shell.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  printf 'error: %s is a library; source it from install.sh/update.sh\n' "$0" >&2
+fi
+
 set -euo pipefail
 
 OVPN_PANEL_VENV="${OVPN_PANEL_VENV:-${OVPN_PANEL_DIR}/.venv}"

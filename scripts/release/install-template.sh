@@ -319,8 +319,18 @@ core_install() {
     --panel-port "${PANEL_PORT}")
   [[ -n "${DOMAIN}" ]] && args+=(--host "${DOMAIN}")
   log "Running core installer from the verified release"
-  # Run from the extracted release; install.sh resolves its own libs.
-  ( cd "${src}" && bash ./scripts/install.sh "${args[@]}" ) 2>&1 | tee -a "${LOG_FILE}"
+  # Run from the extracted release; install.sh resolves its own libs. Capture
+  # combined output so the *inner* installer's error lines (not just "see log")
+  # can be surfaced to the caller on failure.
+  local out rc
+  out="$( cd "${src}" && bash ./scripts/install.sh "${args[@]}" 2>&1 )" && rc=0 || rc=$?
+  printf '%s\n' "${out}" | tee -a "${LOG_FILE}" >&2
+  if [[ "${rc}" -ne 0 ]]; then
+    warn "core installer failed (exit ${rc})"
+    printf 'error: inner installer output (last 30 lines):\n' >&2
+    printf '%s\n' "${out}" | tail -n 30 | tee -a "${LOG_FILE}" >&2
+    die "core installer failed; see the error lines above and ${LOG_FILE}"
+  fi
   ok "core installer finished"
 }
 

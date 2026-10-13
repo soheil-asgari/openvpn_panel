@@ -11,13 +11,16 @@
 #        --instances "udp1:udp:1194:10.8.0.0/24,tcp1:tcp:443:10.9.0.0/24" \
 #        --admin-user admin --admin-password 'S3cret-pw' --panel-port 8080
 #
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/lib/ovpn-core.sh
 . "${SCRIPT_DIR}/lib/ovpn-core.sh"
 # shellcheck source=scripts/lib/panel-core.sh
 . "${SCRIPT_DIR}/lib/panel-core.sh"
+
+# Surface the exact source location and command on any unhandled failure.
+trap 'ovpn_on_err' ERR
 
 SRC_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
