@@ -4,7 +4,7 @@ Read-only discovery of which **open-source tunnel/transport tools** are used by 
 reference project [`eylandoo/openvpn_webpanel_manager`](https://github.com/eylandoo/openvpn_webpanel_manager).
 
 > The reference repository ships a **proprietary "All Rights Reserved" license**
-> ([`LICENSE`](https://github.com/eylandoo/openvpn_webpanel_manager/blob/main/LICENSE)):
+> ([`LICENSE`](https://github.com/eylandoo/openvpn_webpanel_manager)):
 > viewing/evaluation only, no copying, modification, or distribution without a
 > commercial license. Its scripts were inspected **only to identify the upstream
 > third-party tools they download/install**. No script code, text, structure, or
