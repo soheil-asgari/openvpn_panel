@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+#
+# ovpn-panel — interactive management menu.
+#
+# Provides the day-to-day operations that operators expect from a panel:
+# show access info, change port/user/password, add/remove OpenVPN instances,
+# update and uninstall. Also supports a non-interactive sub-command mode:
+#
+#   ovpn-panel                 # interactive menu
+#   ovpn-panel show            # print access information
+#   ovpn-panel set-port 9090
+#   ovpn-panel set-user admin2
+#   ovpn-panel set-password [newpassword]
+#   ovpn-panel update
+#   ovpn-panel restart
+#   ovpn-panel uninstall [--purge]
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When installed, libs live next to this script; in the repo they are in lib/.
+if [[ -f "${SCRIPT_DIR}/lib/ovpn-core.sh" ]]; then
+  LIB_DIR="${SCRIPT_DIR}/lib"
+elif [[ -f "${SCRIPT_DIR}/scripts/lib/ovpn-core.sh" ]]; then
+  LIB_DIR="${SCRIPT_DIR}/scripts/lib"
+else
+  LIB_DIR="${SCRIPT_DIR}"
+fi
+# shellcheck source=lib/ovpn-core.sh
+. "${LIB_DIR}/ovpn-core.sh"
+# shellcheck source=lib/panel-core.sh
+. "${LIB_DIR}/panel-core.sh"
+
+pause() { [[ -t 0 ]] && read -r -p "Press Enter to continue..." _ || true; }
+
+require_root_or_die() {
+  [[ "${EUID}" -eq 0 ]] || ovpn_die "this action requires root (try: sudo ovpn-panel)"
+}
+
+# --- actions -----------------------------------------------------------------
+action_show() {
+  ovpn_panel_print_access
+  printf 'OpenVPN instances (systemd):\n'
+  local name meta
+  for meta in "${OVPN_INSTANCES_DIR}"/*.env; do
+    [[ -f "${meta}" ]] || continue
+    # shellcheck disable=SC1090
+    name="$( . "${meta}"; printf '%s' "${OVPN_INSTANCE_NAME}" )"
+    printf '  openvpn-server@%s  ->  %s\n' "${name}" \
+      "$(systemctl is-active "openvpn-server@${name}" 2>/dev/null || echo unknown)"
+  done
+  printf '\nPanel service : %s\n' "$(systemctl is-active ovpn-panel.service 2>/dev/null || echo unknown)"
+  printf 'Helper service: %s\n' "$(systemctl is-active ovpn-panel-helper.service 2>/dev/null || echo unknown)"
+}
+
+action_set_port() {
+  require_root_or_die
+  local port="${1:-}" old
+  old="$(ovpn_panel_get_port)"
+  [[ -n "${port}" ]] || read -r -p "New panel port [${old}]: " port
+  port="${port:-${old}}"
+  ovpn_validate_port "${port}"
+  ovpn_env_set OVPN_PANEL_PORT "${port}"
+  ovpn_panel_render_unit_port "${port}"
+  ovpn_panel_restart_services
+  ovpn_open_firewall_ports "${port}"
+  ovpn_ok "panel port set to ${port}"
+}
+
+action_set_user() {
+  require_root_or_die
+  local user="${1:-}"
+  [[ -n "${user}" ]] || read -r -p "New admin username: " user
+  [[ -n "${user}" ]] || ovpn_die "username required"
+  ovpn_env_set OVPN_ADMIN_USER "${user}"
+  OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
+    "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli create-admin "${user}" \
+    --password "$(openssl rand -base64 18 2>/dev/null || echo 'ChangeMe-12345678')"
+  ovpn_ok "admin username recorded as ${user}"
+}
+
+action_set_password() {
+  require_root_or_die
+  local user pw="${1:-}"
+  user="$(ovpn_panel_get_admin)"
+  if [[ -z "${pw}" ]]; then
+    read -r -s -p "New password for '${user}': " pw; printf '\n'
+  fi
+  [[ -n "${pw}" ]] || ovpn_die "password required"
+  OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
+    "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli reset-password "${user}" \
+    --password "${pw}"
+  ovpn_ok "password updated"
+}
+
+action_add_instance() {
+  require_root_or_die
+  local spec="${1:-}" iname iproto iport isubnet dns mtu
+  if [[ -z "${spec}" ]]; then
+    read -r -p "Instance name: " iname
+    read -r -p "Protocol (udp/tcp) [udp]: " iproto; iproto="${iproto:-udp}"
+    read -r -p "Port [1194]: " iport; iport="${iport:-1194}"
+    read -r -p "Subnet [10.8.0.0/24]: " isubnet; isubnet="${isubnet:-10.8.0.0/24}"
+    read -r -p "DNS [1.1.1.1]: " dns; dns="${dns:-1.1.1.1}"
+    read -r -p "MTU [1500]: " mtu; mtu="${mtu:-1500}"
+  else
+    IFS=':' read -r iname iproto iport isubnet dns mtu <<<"${spec}"
+    iproto="${iproto:-udp}"; iport="${iport:-1194}"
+    isubnet="${isubnet:-10.8.0.0/24}"; dns="${dns:-1.1.1.1}"; mtu="${mtu:-1500}"
+  fi
+  ovpn_instance_write "${iname}" "${iproto}" "${iport}" "${isubnet}" "${dns}" "${mtu}" ""
+  ovpn_instance_enable "${iname}"
+  ovpn_apply_nat
+  ovpn_open_firewall_ports "${iport}"
+  ovpn_ok "instance ${iname} added"
+}
+
+action_remove_instance() {
+  require_root_or_die
+  local name="${1:-}"
+  [[ -n "${name}" ]] || read -r -p "Instance name to remove: " name
+  ovpn_instance_exists "${name}" || ovpn_die "no such instance: ${name}"
+  ovpn_instance_remove "${name}"
+  ovpn_apply_nat
+}
+
+action_restart() {
+  require_root_or_die
+  ovpn_panel_restart_services
+  local name meta
+  for meta in "${OVPN_INSTANCES_DIR}"/*.env; do
+    [[ -f "${meta}" ]] || continue
+    # shellcheck disable=SC1090
+    name="$( . "${meta}"; printf '%s' "${OVPN_INSTANCE_NAME}" )"
+    systemctl restart "openvpn-server@${name}" 2>/dev/null || true
+  done
+  ovpn_ok "services restarted"
+}
+
+action_update() {
+  require_root_or_die
+  local src="${OVPN_PANEL_SRC:-}"
+  if [[ -n "${src}" && -x "${src}/scripts/update.sh" ]]; then
+    "${src}/scripts/update.sh"
+  elif [[ -x "${SCRIPT_DIR}/update.sh" ]]; then
+    "${SCRIPT_DIR}/update.sh"
+  else
+    ovpn_die "update.sh not found (set OVPN_PANEL_SRC)"
+  fi
+}
+
+action_uninstall() {
+  require_root_or_die
+  local extra="${1:-}"
+  if [[ -x "${SCRIPT_DIR}/uninstall.sh" ]]; then
+    "${SCRIPT_DIR}/uninstall.sh" ${extra:+"${extra}"}
+  else
+    ovpn_die "uninstall.sh not found"
+  fi
+}
+
+menu() {
+  while true; do
+    printf '\n\033[1;34mOpenVPN Web Panel — management\033[0m\n'
+    printf '  1) Show login / access information\n'
+    printf '  2) Change panel port\n'
+    printf '  3) Change admin username\n'
+    printf '  4) Change admin password\n'
+    printf '  5) Add OpenVPN instance\n'
+    printf '  6) Remove OpenVPN instance\n'
+    printf '  7) Restart services\n'
+    printf '  8) Update panel\n'
+    printf '  9) Uninstall panel\n'
+    printf '  0) Exit\n'
+    read -r -p "Select: " choice || break
+    case "${choice}" in
+      1) action_show ;;
+      2) menu_set_port ;;
+      3) action_set_user ;;
+      4) action_set_password ;;
+      5) action_add_instance ;;
+      6) menu_remove_instance ;;
+      7) action_restart ;;
+      8) action_update ;;
+      9) menu_uninstall ;;
+      0|q|Q) break ;;
+      *) ovpn_warn "invalid choice" ;;
+    esac
+    pause
+  done
+}
+
+menu_set_port() {
+  local port; read -r -p "New panel port [$(ovpn_panel_get_port)]: " port
+  action_set_port "${port}"
+}
+
+menu_remove_instance() {
+  local name; read -r -p "Instance name to remove: " name
+  action_remove_instance "${name}"
+}
+
+menu_uninstall() {
+  local ans; read -r -p "Also purge ALL config and data? [y/N]: " ans
+  if [[ "${ans}" =~ ^[yY]$ ]]; then action_uninstall "--purge"; else action_uninstall ""; fi
+}
+
+# --- entrypoint --------------------------------------------------------------
+main() {
+  local cmd="${1:-}"
+  shift || true
+  case "${cmd}" in
+    "") menu ;;
+    show) action_show ;;
+    set-port) action_set_port "${1:-}" ;;
+    set-user) action_set_user "${1:-}" ;;
+    set-password) action_set_password "${1:-}" ;;
+    add-instance) action_add_instance "${1:-}" ;;
+    remove-instance) action_remove_instance "${1:-}" ;;
+    restart) action_restart ;;
+    update) action_update ;;
+    uninstall) action_uninstall "${1:-}" ;;
+    -h|--help|help)
+      cat <<'EOF'
+ovpn-panel — manage the OpenVPN web panel
+
+Commands:
+  (no args)              interactive menu
+  show                   print login / access information
+  set-port PORT          change the panel port
+  set-user NAME          change the admin username
+  set-password [PW]      change the admin password
+  add-instance SPEC      add instance "name:proto:port:subnet[:dns[:mtu]]"
+  remove-instance NAME   remove an OpenVPN instance
+  restart                restart panel, helper and OpenVPN services
+  update                 update the panel from the sources
+  uninstall [--purge]    uninstall the panel
+EOF
+      ;;
+    *) ovpn_die "unknown command: ${cmd} (try: ovpn-panel help)" ;;
+  esac
+}
+
+main "$@"

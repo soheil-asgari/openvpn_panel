@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ t('dashboard.title') }} — {{ panel_title or t('app.name') }}{% endblock %}
+{% block content %}
+<h1>{{ t('dashboard.title') }}</h1>
+<div class="grid stats">
+  <div class="card stat">
+    <span class="stat-label">{{ t('dashboard.online_users') }}</span>
+    <span class="stat-value">{{ data.online_users }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('dashboard.total_users') }}</span>
+    <span class="stat-value">{{ data.total_users }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('dashboard.total_nodes') }}</span>
+    <span class="stat-value">{{ data.total_nodes }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('dashboard.total_traffic') }}</span>
+    <span class="stat-value">{{ data.total_bytes | size }}</span>
+  </div>
+</div>
+
+{% if data.has_metrics %}
+<div class="grid stats">
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.cpu') }}</span>
+    <span class="stat-value">{{ '%.1f' | format(data.metrics.cpu_percent) }}%</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.mem') }}</span>
+    <span class="stat-value">{{ data.metrics.mem_percent }}%</span>
+    <span class="muted">{{ data.metrics.mem_used | size }} / {{ data.metrics.mem_total | size }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.disk') }}</span>
+    <span class="stat-value">{{ data.metrics.disk_percent }}%</span>
+    <span class="muted">{{ data.metrics.disk_used | size }} / {{ data.metrics.disk_total | size }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.net') }}</span>
+    <span class="stat-value">{{ data.metrics.net_rx | size }}</span>
+    <span class="muted">{{ t('users.upload') }}: {{ data.metrics.net_tx | size }}</span>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid two">
+  <div class="card">
+    <h2>{{ t('dashboard.traffic') }}</h2>
+    <canvas id="traffic-chart" height="120"></canvas>
+    <script type="application/json" id="dashboard-traffic">
+      {{ {"labels": data.traffic_labels, "bytes_in": data.traffic_in, "bytes_out": data.traffic_out} | tojson }}
+    </script>
+  </div>
+  <div class="card">
+    <h2>{{ t('dashboard.top_users') }}</h2>
+    <table class="table">
+      <thead><tr><th>#</th><th>{{ t('users.username') }}</th><th>{{ t('dashboard.used') }}</th></tr></thead>
+      <tbody>
+        {% for u in data.top_users %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ u.username }}{% if u.is_online %} <span class="badge badge-on">{{ t('users.online') }}</span>{% endif %}</td>
+          <td>{{ u.used_bytes | size }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="muted">—</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var canvas = document.getElementById("traffic-chart");
+    var dataEl = document.getElementById("dashboard-traffic");
+    if (!canvas || !dataEl || typeof window.Chart === "undefined") return;
+    var payload = JSON.parse(dataEl.textContent);
+    new window.Chart(canvas, {
+      type: "line",
+      data: {
+        labels: payload.labels,
+        datasets: [
+          { label: "{{ t('users.download') }}", data: payload.bytes_in, borderColor: "#2563eb", tension: 0.3 },
+          { label: "{{ t('users.upload') }}", data: payload.bytes_out, borderColor: "#16a34a", tension: 0.3 }
+        ]
+      },
+      options: { responsive: true }
+    });
+  })();
+</script>
+{% endblock %}

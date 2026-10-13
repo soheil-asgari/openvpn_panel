@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ovpn-panel"
+version = "1.0.0rc1"
+description = "Self-hosted OpenVPN web panel with multi-node, resellers and a REST API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "OpenVPN Web Panel contributors" }]
+# Exact pins (deterministic installs). See requirements.lock for the full
+# transitive lockfile. Bump deliberately, not implicitly.
+dependencies = [
+    "fastapi==0.143.0",
+    "uvicorn[standard]==0.54.0",
+    "sqlalchemy==2.0.54",
+    "alembic==1.20.0",
+    "apscheduler==3.11.3",
+    "jinja2==3.1.6",
+    "argon2-cffi==25.1.0",
+    "python-multipart==0.0.32",
+    "itsdangerous==2.2.0",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.15.0",
+    "httpx==0.28.1",
+    "email-validator==2.3.0",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]==3.2.3"]
+# Tunnel Manager: SSH provisioning + panel key generation.
+tunnels = [
+    "paramiko==3.5.0",
+    "cryptography==44.0.0",
+]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "ruff==0.17.0",
+    "pre-commit==4.0.1",
+    "httpx==0.28.1",
+    "paramiko==3.5.0",
+    "cryptography==44.0.0",
+]
+
+[project.scripts]
+ovpn-panel = "scripts.cli:main"
+ovpn-panel-auth = "app.services.auth_socket:main"
+
+[tool.setuptools]
+packages = [
+    "app",
+    "app.api",
+    "app.core",
+    "app.models",
+    "app.services",
+    "app.services.protocols",
+    "agent",
+    "helper",
+    "scripts",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+ignore = ["B008", "UP017", "UP037", "UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*" = ["E501"]
+"app/services/config_builder.py" = ["E501"]
+"tests/*" = ["E501", "ANN001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+asyncio_mode = "auto"
+markers = [
+    "integration: requires Docker (set OVPN_TUNNEL_INTEGRATION=1 to run)",
+]

@@ -1,0 +1,49 @@
+name: Release gate
+
+# Fails if any script or doc instructs installing from a mutable branch
+# (raw.githubusercontent.com/.../main or /master). Release artifacts must be
+# fetched from tagged releases only.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  no-main-branch-install-urls:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject main/master install URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Scanning for mutable-branch install URLs ..."
+          # Require a real owner/repo path (two segments) before the branch so
+          # prose that merely *mentions* the pattern is not flagged.
+          if grep -RInE \
+              -e 'raw\.githubusercontent\.com/[^/[:space:]]+/[^/[:space:]]+/(main|master)/' \
+              -e 'github\.com/[^/[:space:]]+/[^/[:space:]]+/(raw|blob)/(main|master)/' \
+              --include='*.sh' --include='*.md' --include='*.yml' --include='*.yaml' \
+              --include='*.html' --include='*.py' \
+              --exclude-dir='.git' --exclude-dir='.venv' . ; then
+            echo "::error::Found an install URL pointing at a mutable branch."
+            echo "Use a tagged release (releases/latest/download/... or releases/download/vX.Y.Z/...)."
+            exit 1
+          fi
+          echo "OK: no mutable-branch install URLs."
+
+  no-bundled-tunnel-binaries:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no GPL/AGPL tunnel binaries are committed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -Ei '(backhaul|sing-box|singbox)([._-]?[0-9])' ; then
+            echo "::error::Committed third-party tunnel binary detected; these must be downloaded at install time."
+            exit 1
+          fi
+          echo "OK: no bundled tunnel binaries."

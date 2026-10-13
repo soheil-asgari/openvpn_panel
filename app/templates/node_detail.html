@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ node.name }} — {{ t('nodes.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ node.name }}</h1>
+  <div class="page-actions">
+    <span class="badge badge-{{ 'ok' if node.status.value == 'online' else 'off' }}">{{ node.status.value }}</span>
+    {% if node.last_seen_at %}<span class="muted">{{ t('nodes.last_seen') }}: {{ node.last_seen_at.strftime('%Y-%m-%d %H:%M') }}</span>{% endif %}
+  </div>
+</div>
+
+<div class="grid stats">
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.clients') }}</span>
+    <span class="stat-value">{{ metric.client_count if metric else 0 }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.cpu') }}</span>
+    <span class="stat-value">{% if metric %}{{ '%.1f' | format(metric.cpu_percent) }}%{% else %}—{% endif %}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.mem') }}</span>
+    <span class="stat-value">{% if metric %}{{ metric.mem_used | size }}{% else %}—{% endif %}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.disk') }}</span>
+    <span class="stat-value">{% if metric %}{{ metric.disk_used | size }}{% else %}—{% endif %}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('nodes.uptime') }}</span>
+    <span class="stat-value">{% if metric %}{{ metric.uptime_seconds // 3600 }}h{% else %}—{% endif %}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('nodes.install') }}</h2>
+  <p class="muted">{{ t('nodes.install_hint') }}</p>
+  <div class="sub-token">
+    <input type="text" readonly value="{{ install_command }}" id="install-cmd">
+    <button type="button" class="btn" data-copy-target="#install-cmd">{{ t('sub.copy_link') }}</button>
+  </div>
+  <p class="muted">{{ t('nodes.agent_port') }}: {{ agent_port }}</p>
+</div>
+
+<div class="card">
+  <h2>{{ t('nodes.config') }}</h2>
+  <form hx-put="{{ base_path }}/partials/nodes/{{ node.id }}/config" hx-swap="none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <textarea name="content" rows="18" class="mono">{{ config_text }}</textarea>
+    <div class="modal-actions">
+      <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>{{ t('nodes.queue') }}</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{ t('nodes.kind') }}</th>
+        <th>{{ t('nodes.status') }}</th>
+        <th>{{ t('nodes.attempts') }}</th>
+        <th>{{ t('nodes.last_error') }}</th>
+        <th>{{ t('nodes.run_after') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in tasks %}
+      <tr>
+        <td class="mono">{{ task.kind }}</td>
+        <td><span class="badge">{{ task.status.value }}</span></td>
+        <td>{{ task.attempts }} / {{ task.max_attempts }}</td>
+        <td class="muted">{{ task.last_error or '' }}</td>
+        <td>{{ task.run_after.strftime('%H:%M:%S') }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">—</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+  document.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var input = document.querySelector(btn.getAttribute('data-copy-target'));
+      if (input) { input.select(); if (navigator.clipboard) { navigator.clipboard.writeText(input.value); } }
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ t('server_config.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('server_config.title') }}</h1>
+</div>
+{% if request.query_params.get('saved') %}<p class="alert alert-ok">{{ t('settings.saved') }}</p>{% endif %}
+{% if request.query_params.get('error') == 'validation' %}<p class="alert alert-error">{{ t('server_config.invalid') }}</p>{% endif %}
+
+<p class="muted">{{ t('server_config.hint') }}</p>
+
+<form method="post" action="{{ base_path }}/settings/server-config/apply" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <textarea name="content" rows="24" class="mono" spellcheck="false">{{ config_text }}</textarea>
+  <label class="inline">
+    <input type="checkbox" name="restart" checked> {{ t('server_config.restart') }}
+  </label>
+  <div class="modal-actions">
+    <a class="btn" href="{{ base_path }}/settings">{{ t('common.back') }}</a>
+    <button type="submit" class="btn btn-primary">{{ t('server_config.apply') }}</button>
+  </div>
+</form>
+{% endblock %}

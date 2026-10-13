@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ t('resellers.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('resellers.title') }}</h1>
+  <div class="page-actions">
+    <button class="btn btn-primary" hx-get="{{ base_path }}/partials/resellers/new" hx-target="#modal" hx-swap="innerHTML">
+      {{ t('resellers.new') }}
+    </button>
+  </div>
+</div>
+<div id="resellers-panel">
+  {% include "partials/resellers_table.html" %}
+</div>
+<div id="modal"></div>
+{% endblock %}

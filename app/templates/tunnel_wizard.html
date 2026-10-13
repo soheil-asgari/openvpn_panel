@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{{ t('tunnels.new') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('tunnels.new') }}</h1>
+</div>
+
+<div class="card">
+  <p class="muted">{{ t('tunnels.wizard_hint') }}</p>
+  <form method="post" action="{{ base_path }}/tunnels" id="tunnel-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <fieldset>
+      <legend>{{ t('tunnels.step_entry') }}</legend>
+      <label>{{ t('tunnels.name') }}
+        <input type="text" name="name" required pattern="[a-zA-Z0-9_.-]{2,32}">
+      </label>
+      <label>{{ t('tunnels.entry_host') }}
+        <input type="text" name="entry_host" id="entry-host" required>
+      </label>
+      <label>{{ t('tunnels.ssh_port') }}
+        <input type="number" name="entry_ssh_port" id="entry-ssh-port" value="22" min="1" max="65535">
+      </label>
+      <label>{{ t('tunnels.ssh_user') }}
+        <input type="text" name="entry_username" value="root" required>
+      </label>
+      <label>{{ t('tunnels.auth_method') }}
+        <select name="auth_method" id="auth-method">
+          <option value="password">{{ t('tunnels.auth_password') }}</option>
+          <option value="key">{{ t('tunnels.auth_key') }}</option>
+        </select>
+      </label>
+      <label>{{ t('tunnels.password_once') }}
+        <input type="password" name="password" autocomplete="off">
+      </label>
+      <label>{{ t('tunnels.private_key') }}
+        <textarea name="private_key" rows="4" class="mono" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+      </label>
+      <p class="muted">{{ t('tunnels.password_note') }}</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{ t('tunnels.step_fingerprint') }}</legend>
+      <label>{{ t('tunnels.fingerprint') }}
+        <input type="text" name="host_key_fingerprint" id="fingerprint" placeholder="SHA256:...">
+      </label>
+      <button type="button" class="btn"
+              hx-post="{{ base_path }}/partials/tunnels/fingerprint-probe"
+              hx-include="#entry-host,#entry-ssh-port"
+              hx-target="#fingerprint-result" hx-swap="innerHTML">{{ t('tunnels.probe') }}</button>
+      <div id="fingerprint-result" class="muted"></div>
+      <p class="muted">{{ t('tunnels.fingerprint_hint') }}</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{ t('tunnels.step_backend') }}</legend>
+      <label>{{ t('tunnels.backend') }}
+        <select name="backend">
+          <option value="auto">{{ t('tunnels.auto') }}</option>
+          {% for b in backends %}<option value="{{ b.kind }}">{{ b.kind }} ({{ b.license }})</option>{% endfor %}
+        </select>
+      </label>
+      <label>{{ t('tunnels.transport') }}
+        <select name="transport">
+          <option value="auto">{{ t('tunnels.auto') }}</option>
+          <option value="tcp">tcp</option>
+          <option value="tcpmux">tcpmux</option>
+          <option value="udp">udp</option>
+          <option value="wg">wg</option>
+        </select>
+      </label>
+      <label>{{ t('tunnels.control_port') }}
+        <input type="number" name="control_port" value="{{ suggested_port }}" min="1" max="65535">
+      </label>
+      <label>{{ t('tunnels.public_ports') }}
+        <input type="text" name="public_ports" placeholder="443, 8443, 1194">
+      </label>
+      <label>{{ t('tunnels.exit_host') }}
+        <input type="text" name="exit_host" placeholder="{{ t('common.optional') }}">
+      </label>
+      <button type="button" class="btn"
+              hx-post="{{ base_path }}/partials/tunnels/benchmark"
+              hx-include="#entry-host"
+              hx-target="#benchmark-result" hx-swap="innerHTML">{{ t('tunnels.benchmark') }}</button>
+      <div id="benchmark-result" class="muted"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{ t('tunnels.step_attach') }}</legend>
+      <label>{{ t('nodes.title') }}
+        <select name="node_id">
+          <option value="0">—</option>
+          {% for n in nodes %}<option value="{{ n.id }}">{{ n.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>{{ t('tunnels.instance') }}
+        <input type="text" name="instance_name" placeholder="{{ t('common.optional') }}">
+      </label>
+      <label>{{ t('tunnels.mtu') }}
+        <input type="number" name="mtu" min="576" max="9000" value="0">
+      </label>
+      <label class="inline"><input type="checkbox" name="auto_heal" checked> {{ t('tunnels.auto_heal') }}</label>
+      <label class="inline"><input type="checkbox" name="disable_password_login"> {{ t('tunnels.disable_password') }}</label>
+    </fieldset>
+
+    <div class="modal-actions">
+      <button type="submit" class="btn btn-primary">{{ t('tunnels.provision') }}</button>
+      <a class="btn" href="{{ base_path }}/tunnels">{{ t('common.cancel') }}</a>
+    </div>
+  </form>
+</div>
+
+<div id="modal"></div>
+
+<script>
+  (function () {
+    // Copy a probed fingerprint into the form field once HTMX swaps it in.
+    document.body.addEventListener('htmx:afterSwap', function (evt) {
+      if (evt.detail.target && evt.detail.target.id === 'fingerprint-result') {
+        var probed = evt.detail.target.querySelector('#fp-probe');
+        if (probed && probed.value) {
+          document.getElementById('fingerprint').value = probed.value;
+        }
+      }
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+<div class="modal card">
+  <h2>{{ t('sub.title') }} — {{ vpn_user.username }}</h2>
+  <p class="muted">{{ t('sub.hint') }}</p>
+
+  <div class="sub-token">
+    <input type="text" readonly value="{{ sub_url }}" id="sub-url">
+    <button type="button" class="btn" data-copy-target="#sub-url">{{ t('sub.copy_link') }}</button>
+    <button class="btn" hx-post="{{ base_path }}/partials/users/{{ vpn_user.id }}/subscription/token"
+            hx-target="#modal" hx-swap="innerHTML"
+            hx-confirm="{{ t('sub.regenerate_confirm') }}">{{ t('sub.regenerate') }}</button>
+  </div>
+
+  <form hx-post="{{ base_path }}/partials/users/{{ vpn_user.id }}/subscription/visibility"
+        hx-target="#modal" hx-swap="innerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <h3>{{ t('sub.visible_nodes') }}</h3>
+    <ul class="sub-node-list">
+      {% for node in nodes %}
+      {% set tunnel = tunnel_by_node.get(node.id) %}
+      <li>
+        <label>
+          <input type="checkbox" name="node_id" value="{{ node.id }}"
+                 {{ 'checked' if node.id not in hidden_node_ids else '' }}>
+          {{ node.name }} <span class="muted mono">{{ node.host }}:{{ node.port }} {{ node.protocol }}</span>
+          {% if tunnel %}<span class="badge badge-ok">{{ t('sub.via_tunnel') }}: {{ tunnel.entry_host }}</span>{% endif %}
+        </label>
+      </li>
+      {% else %}
+      <li class="muted">—</li>
+      {% endfor %}
+    </ul>
+    <label class="inline">
+      <input type="checkbox" name="use_tunnel" {{ 'checked' if vpn_user.use_tunnel else '' }}>
+      {{ t('sub.use_tunnel') }}
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('modal').innerHTML=''">{{ t('common.close') }}</button>
+      <button type="submit" class="btn btn-primary">{{ t('common.save') }}</button>
+    </div>
+  </form>
+</div>
+<script>
+  document.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var input = document.querySelector(btn.getAttribute('data-copy-target'));
+      if (!input) { return; }
+      input.select();
+      if (navigator.clipboard) { navigator.clipboard.writeText(input.value); }
+    });
+  });
+</script>

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ t('permissions.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('permissions.title') }}</h1>
+</div>
+<p class="muted">{{ t('permissions.hint') }}</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>{{ t('permissions.permission') }}</th>
+      <th>{{ t('permissions.description') }}</th>
+      {% for role in roles %}<th>{{ role }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="mono">{{ row.permission }}</td>
+      <td>{{ row.label }}</td>
+      {% for role in roles %}
+      <td>{% if row.roles[role] %}<span class="badge badge-ok">✓</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

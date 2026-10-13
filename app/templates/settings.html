@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}{{ t('settings.title') }} — {{ panel_title | default(t('app.name')) }}{% endblock %}
+{% block content %}
+<h1>{{ t('settings.title') }}</h1>
+{% if request.query_params.get('saved') %}<p class="alert alert-ok">{{ t('settings.saved') }}</p>{% endif %}
+{% if request.query_params.get('error') == 'current' %}<p class="alert alert-error">{{ t('settings.error_current') }}</p>{% endif %}
+{% if request.query_params.get('error') == 'mismatch' %}<p class="alert alert-error">{{ t('settings.error_mismatch') }}</p>{% endif %}
+{% if request.query_params.get('error') == 'weak' %}<p class="alert alert-error">{{ t('settings.error_weak') }}</p>{% endif %}
+{% if request.query_params.get('error') == 'ssl' %}<p class="alert alert-error">{{ t('settings.error_ssl') }}</p>{% endif %}
+{% if request.query_params.get('error') == 'backup' %}<p class="alert alert-error">{{ t('settings.error_backup') }}</p>{% endif %}
+{% if request.query_params.get('error') == 'restore' %}<p class="alert alert-error">{{ t('settings.error_restore') }}</p>{% endif %}
+<div class="grid two">
+  <form method="post" action="{{ base_path }}/preferences" class="card">
+    <h2>{{ t('settings.title') }}</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('settings.language') }}
+      <select name="language">
+        <option value="en" {{ 'selected' if lang == 'en' else '' }}>English</option>
+        <option value="fa" {{ 'selected' if lang == 'fa' else '' }}>فارسی</option>
+      </select>
+    </label>
+    <label>{{ t('settings.theme') }}
+      <select name="theme">
+        <option value="system" {{ 'selected' if theme == 'system' else '' }}>system</option>
+        <option value="light" {{ 'selected' if theme == 'light' else '' }}>light</option>
+        <option value="dark" {{ 'selected' if theme == 'dark' else '' }}>dark</option>
+      </select>
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+  </form>
+
+  <form method="post" action="{{ base_path }}/change-password" class="card">
+    <h2>{{ t('settings.password') }}</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('settings.current_password') }}
+      <input type="password" name="current_password" autocomplete="current-password" required>
+    </label>
+    <label>{{ t('settings.new_password') }}
+      <input type="password" name="new_password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <label>{{ t('settings.confirm_password') }}
+      <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+  </form>
+
+  <div class="card">
+    <h2>{{ t('settings.api_keys') }}</h2>
+    <button class="btn" hx-post="{{ base_path }}/partials/keys/new" hx-target="#modal" hx-swap="innerHTML">{{ t('settings.new_api_key') }}</button>
+    <ul id="keys-list" class="list"></ul>
+  </div>
+
+  {% if user.is_admin %}
+  <form method="post" action="{{ base_path }}/settings/panel" class="card">
+    <h2>{{ t('settings.panel') }}</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('settings.panel_title') }}
+      <input type="text" name="title" value="{{ panel.title }}" maxlength="80">
+    </label>
+    <label>{{ t('settings.language') }}
+      <select name="language">
+        <option value="en" {{ 'selected' if panel.language == 'en' else '' }}>English</option>
+        <option value="fa" {{ 'selected' if panel.language == 'fa' else '' }}>فارسی</option>
+      </select>
+    </label>
+    <label>{{ t('settings.theme') }}
+      <select name="theme">
+        <option value="system" {{ 'selected' if panel.theme == 'system' else '' }}>system</option>
+        <option value="light" {{ 'selected' if panel.theme == 'light' else '' }}>light</option>
+        <option value="dark" {{ 'selected' if panel.theme == 'dark' else '' }}>dark</option>
+      </select>
+    </label>
+    <label>{{ t('settings.panel_port') }}
+      <input type="number" name="port" min="1" max="65535" value="{{ panel.port }}">
+    </label>
+    <label class="inline">
+      <input type="checkbox" name="update_enabled" {{ 'checked' if panel.update_enabled == 'true' else '' }}> {{ t('settings.update_enabled') }}
+    </label>
+    <label>{{ t('settings.update_repo') }}
+      <input type="text" name="update_repo" value="{{ panel.update_repo }}" placeholder="owner/repo" maxlength="100">
+    </label>
+    <p class="muted">{{ t('settings.update_hint') }}</p>
+    <p class="muted">{{ t('settings.version') }}: {{ version }}</p>
+    <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+  </form>
+
+  <form method="post" action="{{ base_path }}/settings/ssl/letsencrypt" class="card">
+    <h2>{{ t('settings.ssl') }} — Let's Encrypt</h2>
+    <p class="muted">{{ t('settings.ssl_hint') }}</p>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('settings.domain') }}
+      <input type="text" name="domain" value="{{ ssl_status.domain }}" placeholder="panel.example.com">
+    </label>
+    <label>{{ t('settings.email') }}
+      <input type="email" name="email" value="{{ ssl_status.email }}">
+    </label>
+    <label class="inline">
+      <input type="checkbox" name="auto_renew" {{ 'checked' if ssl_status.auto_renew else '' }}> {{ t('settings.auto_renew') }}
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+  </form>
+
+  <form method="post" action="{{ base_path }}/settings/ssl/custom" class="card">
+    <h2>{{ t('settings.ssl_custom') }}</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('settings.cert_pem') }}
+      <textarea name="cert_pem" rows="6" class="mono" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+    </label>
+    <label>{{ t('settings.key_pem') }}
+      <textarea name="key_pem" rows="6" class="mono" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+  </form>
+
+  <form method="post" action="{{ base_path }}/settings/background" class="card">
+    <h2>{{ t('settings.backup') }}</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('settings.backup_schedule') }}
+      <select name="schedule">
+        <option value="off" {{ 'selected' if backup.schedule == 'off' else '' }}>off</option>
+        <option value="daily" {{ 'selected' if backup.schedule == 'daily' else '' }}>daily</option>
+        <option value="weekly" {{ 'selected' if backup.schedule == 'weekly' else '' }}>weekly</option>
+      </select>
+    </label>
+    <label>{{ t('settings.backup_upload') }}
+      <select name="upload">
+        <option value="none" {{ 'selected' if backup.upload == 'none' else '' }}>none</option>
+        <option value="telegram" {{ 'selected' if backup.upload == 'telegram' else '' }}>telegram</option>
+        <option value="webhook" {{ 'selected' if backup.upload == 'webhook' else '' }}>webhook</option>
+      </select>
+    </label>
+    <label>{{ t('settings.telegram_token') }}
+      <input type="text" name="telegram_token" value="{{ backup.telegram_token }}">
+    </label>
+    <label>{{ t('settings.telegram_chat') }}
+      <input type="text" name="telegram_chat" value="{{ backup.telegram_chat }}">
+    </label>
+    <label>{{ t('settings.webhook_url') }}
+      <input type="url" name="webhook_url" value="{{ backup.webhook_url }}">
+    </label>
+    {% if backup.last_run %}<p class="muted">{{ t('settings.last_backup') }}: {{ backup.last_run }}</p>{% endif %}
+    <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+  </form>
+
+  <form method="post" action="{{ base_path }}/settings/backup/download" class="card">
+    <h2>{{ t('settings.backup_now') }}</h2>
+    <p class="muted">{{ t('settings.backup_now_hint') }}</p>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('settings.backup_password') }}
+      <input type="password" name="password" required minlength="8">
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('settings.download_backup') }}</button>
+  </form>
+  {% endif %}
+
+  {% if user.is_admin %}
+  <form method="post" action="{{ base_path }}/branding" class="card">
+    <h2>{{ t('sub.branding') }}</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('sub.brand_name') }}
+      <input type="text" name="brand_name" value="{{ branding['branding.name'] }}" maxlength="64">
+    </label>
+    <label>{{ t('sub.logo_url') }}
+      <input type="url" name="logo_url" value="{{ branding['branding.logo_url'] }}" placeholder="https://...">
+    </label>
+    <label>{{ t('sub.support_url') }}
+      <input type="url" name="support_url" value="{{ branding['branding.support_url'] }}" placeholder="https://...">
+    </label>
+    <label>{{ t('sub.footer') }}
+      <input type="text" name="footer" value="{{ branding['branding.footer'] }}" maxlength="200">
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('settings.save') }}</button>
+  </form>
+  {% endif %}
+</div>
+<div id="modal"></div>
+{% endblock %}

@@ -1,0 +1,44 @@
+<div class="modal card">
+  <h2>{{ t('protocols.user_protocols') }} — {{ vpn_user.username }}</h2>
+  <form hx-post="{{ base_path }}/partials/users/{{ vpn_user.id }}/protocols"
+        hx-target="#modal" hx-swap="innerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{{ t('protocols.enable_for_user') }}</th>
+          <th>{{ t('protocols.name') }}</th>
+          <th>{{ t('protocols.kind') }}</th>
+          <th>{{ t('users.download') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><input type="checkbox" name="instance_ids" value="{{ row.instance.id }}" {{ 'checked' if row.enabled else '' }}></td>
+          <td>{{ row.instance.name }}</td>
+          <td class="muted">{{ row.instance.kind }}</td>
+          <td class="muted">{{ row.usage | size }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">—</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="modal-actions">
+      <button type="submit" class="btn btn-primary">{{ t('common.save') }}</button>
+      <button type="button" class="btn" onclick="document.getElementById('modal').innerHTML=''">{{ t('common.cancel') }}</button>
+    </div>
+  </form>
+
+  {% if links %}
+  <h3>{{ t('sub.links') }}</h3>
+  <ul class="protocol-links">
+    {% for link in links %}
+    <li><code class="mono">{{ link.kind }}</code>
+      <button type="button" class="btn btn-sm" data-copy="{{ link.uri }}">{{ t('sub.copy_link') }}</button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>

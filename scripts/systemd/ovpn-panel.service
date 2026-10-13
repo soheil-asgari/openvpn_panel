@@ -1,0 +1,25 @@
+[Unit]
+Description=OpenVPN Web Panel
+After=network-online.target
+Wants=network-online.target
+Requires=ovpn-panel-helper.service
+
+[Service]
+Type=simple
+User=ovpn-panel
+Group=ovpn-panel
+Environment=OVPN_PANEL_CONFIG_DIR=/etc/ovpn-panel
+Environment=OVPN_AUTH_SOCKET=/run/ovpn-panel/auth.sock
+WorkingDirectory=/opt/ovpn-panel
+ExecStart=/opt/ovpn-panel/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/ovpn-panel /run/ovpn-panel
+SupplementaryGroups=ovpn-panel
+
+[Install]
+WantedBy=multi-user.target

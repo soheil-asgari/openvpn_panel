@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Project logo">
+  <title>Project logo — original design</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14b8a6"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#0b1120"/>
+  <!-- shield -->
+  <path d="M128 34l66 26v58c0 44-27 76-66 104-39-28-66-60-66-104V60z"
+        fill="none" stroke="url(#g)" stroke-width="10" stroke-linejoin="round"/>
+  <!-- three connected nodes: entry / core / exit -->
+  <g fill="url(#g)">
+    <circle cx="92" cy="120" r="11"/>
+    <circle cx="164" cy="120" r="11"/>
+    <circle cx="128" cy="170" r="11"/>
+  </g>
+  <g stroke="url(#g)" stroke-width="8" stroke-linecap="round">
+    <line x1="103" y1="120" x2="153" y2="120"/>
+    <line x1="96" y1="128" x2="122" y2="161"/>
+    <line x1="160" y1="128" x2="134" y2="161"/>
+  </g>
+</svg>

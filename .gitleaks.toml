@@ -1,0 +1,40 @@
+# gitleaks configuration for this repository.
+#
+# Runs on the working tree and on the full git history in CI and as a
+# pre-commit hook. See docs/security/ for the latest scan reports.
+title = "ovpn-panel gitleaks config"
+
+[extend]
+# Inherit the upstream default ruleset, then narrow it below.
+useDefault = true
+
+[allowlist]
+description = "Known-safe placeholders and test fixtures (never real secrets)."
+paths = [
+  # Third-party virtualenv / caches are never committed but may exist locally.
+  '''\.venv/''',
+  '''node_modules/''',
+  # Example/template files contain intentional placeholders only.
+  '''scripts/openvpn/panel\.env\.example''',
+  # The QR/EC table and CA bundle are data, not secrets.
+  '''app/core/qr\.py''',
+  '''cacert\.pem''',
+]
+regexes = [
+  # Obvious documentation placeholders.
+  '''change-me-at-install''',
+  '''change-me''',
+  '''S3cret-pw''',
+  '''admin-password''',
+  '''reseller-password''',
+  '''demo-password''',
+  '''release-test-password''',
+  '''<owner>''',
+  '''<your-org>''',
+  '''example\.com''',
+]
+# Test files legitimately reference dummy credentials and PEM markers.
+stopwords = [
+  "placeholder",
+  "example",
+]

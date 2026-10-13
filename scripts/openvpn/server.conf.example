@@ -1,0 +1,58 @@
+# Example OpenVPN server configuration for a single ovpn-panel instance.
+#
+# The installer renders one file per instance at
+#   /etc/openvpn/instances/<name>.conf
+# and starts it through the template unit openvpn-server@<name>.service.
+#
+# Adjust the values below as needed; the installer overwrites this file when an
+# instance is (re)created through the CLI.
+
+port 1194
+proto udp
+dev tun
+topology subnet
+
+ca   /etc/openvpn/pki/ca.crt
+cert /etc/openvpn/pki/issued/server.crt
+key  /etc/openvpn/pki/private/server.key
+dh   none
+tls-crypt /etc/openvpn/pki/tls-crypt.key
+
+server 10.8.0.0 255.255.255.0
+ifconfig-pool-persist /run/openvpn/server-ipp.txt
+
+keepalive 10 120
+cipher AES-256-GCM
+data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+auth SHA256
+tls-version-min 1.2
+remote-cert-tls client
+
+user  nobody
+group nogroup
+persist-key
+persist-tun
+
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS 1.1.1.1"
+push "block-outside-dns"
+tun-mtu 1500
+
+status /run/openvpn/server-status.log 30
+verb 3
+
+# --- Panel integration -----------------------------------------------------
+# Live status / forced disconnects use the management unix socket.
+management /run/openvpn/server.sock unix
+
+# Required so the hook scripts may be executed.
+script-security 2
+
+# Username/password authentication via the panel's local unix socket. Because a
+# shared CA is used, client certificates are not required.
+auth-user-pass-verify /opt/ovpn-panel/scripts/hooks/auth-user-pass-verify.sh via-file
+client-connect       /opt/ovpn-panel/scripts/hooks/client-connect.sh
+client-disconnect    /opt/ovpn-panel/scripts/hooks/client-disconnect.sh
+verify-client-cert none
+username-as-common-name
+duplicate-cn

@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip build
+          pip install -e ".[dev]"
+
+      - name: Lint and test
+        run: |
+          ruff check .
+          ruff format --check .
+          pytest -q
+        env:
+          OVPN_PANEL_CONFIG_DIR: ${{ runner.temp }}/ovpn-panel
+          OVPN_DATABASE_URL: sqlite:///${{ runner.temp }}/ovpn-panel/ci.sqlite3
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Build release artifacts (tarball, install.sh, SHA256SUMS)
+        env:
+          SLUG: ovpn-panel
+          REPO: ${{ github.repository }}
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y shellcheck
+          scripts/release/build-release.sh "${GITHUB_REF_NAME}"
+
+      - name: Attach artifacts and publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
+            dist/install.sh
+            dist/SHA256SUMS
+          generate_release_notes: true
+          # Release candidates are marked pre-release so that
+          # releases/latest/download/... never serves them.
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}

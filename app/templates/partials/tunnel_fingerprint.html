@@ -1,0 +1,24 @@
+<div class="sub-token">
+  <input type="text" readonly value="{{ fingerprint }}" id="fp-value" class="mono">
+  <button type="button" class="btn" data-copy-target="#fp-value">{{ t('sub.copy_link') }}</button>
+</div>
+{% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
+{% if not tunnel.host_key_fingerprint and fingerprint %}
+<form hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/confirm-fingerprint"
+      hx-target="#fingerprint-box" hx-swap="innerHTML">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="fingerprint" value="{{ fingerprint }}">
+  <p class="muted">{{ t('tunnels.fingerprint_confirm_hint') }}</p>
+  <button type="submit" class="btn btn-primary">{{ t('tunnels.confirm_fingerprint') }}</button>
+</form>
+{% elif tunnel.host_key_fingerprint %}
+<p class="muted">✔ {{ t('tunnels.fingerprint_pinned') }}</p>
+{% endif %}
+<script>
+  document.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var input = document.querySelector(btn.getAttribute('data-copy-target'));
+      if (input) { input.select(); if (navigator.clipboard) { navigator.clipboard.writeText(input.value); } }
+    });
+  });
+</script>

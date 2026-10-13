@@ -1,0 +1,7 @@
+<div id="tunnel-logs">
+  {% if error %}
+  <p class="alert alert-error">{{ error }}</p>
+  {% else %}
+  <pre class="mono log-view">{{ log or t('tunnels.no_logs') }}</pre>
+  {% endif %}
+</div>

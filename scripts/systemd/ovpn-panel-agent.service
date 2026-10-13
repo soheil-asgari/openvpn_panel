@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenVPN Web Panel node agent
+After=network-online.target openvpn-server@server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ovpn-panel
+Group=ovpn-panel
+Environment=OVPN_AGENT_CONFIG_DIR=/etc/ovpn-panel
+WorkingDirectory=/opt/ovpn-panel
+ExecStart=/opt/ovpn-panel/.venv/bin/uvicorn agent.main:app --host 127.0.0.1 --port 8090
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/run/ovpn-panel
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,55 @@
+<div class="modal card">
+  <h2>{{ t('resellers.edit') if reseller else t('resellers.new') }}</h2>
+  <form hx-post="{{ base_path }}/partials/resellers{% if reseller %}/{{ reseller.id }}{% endif %}"
+        hx-target="#resellers-panel" hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if not reseller %}
+    <label>{{ t('users.username') }}
+      <input type="text" name="username" required pattern="[a-zA-Z0-9_.-]{3,32}">
+    </label>
+    {% else %}
+    <p class="muted">{{ reseller.username }}</p>
+    {% endif %}
+    <label>{{ t('login.password') }}{% if reseller %} ({{ t('common.optional') }}){% endif %}
+      <input type="text" name="password" {% if not reseller %}required{% endif %} minlength="8" autocomplete="new-password">
+    </label>
+    <label>{{ t('resellers.email') }}
+      <input type="email" name="email" value="{{ reseller.email if reseller and reseller.email else '' }}">
+    </label>
+    <label>{{ t('resellers.quota') }}
+      <input type="number" name="quota_users" min="0"
+             value="{{ reseller.quota_users if reseller and reseller.quota_users is not none else '' }}"
+             placeholder="{{ t('users.unlimited') }}">
+    </label>
+    <label>{{ t('resellers.data_quota') }}
+      <input type="text" name="max_data" value="{{ reseller.max_data_bytes if reseller and reseller.max_data_bytes else '' }}"
+             placeholder="e.g. 500GB">
+    </label>
+    <label>{{ t('resellers.expires') }}
+      <input type="date" name="expires_at"
+             value="{{ reseller.expires_at.strftime('%Y-%m-%d') if reseller and reseller.expires_at else '' }}">
+    </label>
+    {% if reseller %}
+    <label class="inline">
+      <input type="checkbox" name="is_active" {{ 'checked' if reseller.is_active else '' }}> {{ t('users.active') }}
+    </label>
+    {% endif %}
+    <fieldset>
+      <legend>{{ t('resellers.allowed_nodes') }}</legend>
+      <p class="muted">{{ t('resellers.allowed_nodes_hint') }}</p>
+      {% for n in nodes %}
+      <label class="inline">
+        <input type="checkbox" name="node_id" value="{{ n.id }}"
+               {{ 'checked' if n.id in allowed_node_ids or unrestricted else '' }}>
+        {{ n.name }}
+      </label>
+      {% else %}
+      <p class="muted">—</p>
+      {% endfor %}
+    </fieldset>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="document.getElementById('modal').innerHTML=''">{{ t('common.cancel') }}</button>
+      <button type="submit" class="btn btn-primary">{{ t('common.save') }}</button>
+    </div>
+  </form>
+</div>

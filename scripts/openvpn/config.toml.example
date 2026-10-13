@@ -1,0 +1,17 @@
+# Optional TOML configuration for OpenVPN Web Panel.
+# Install to /etc/ovpn-panel/config.toml (mode 640). Values here are overridden
+# by /etc/ovpn-panel/panel.env and by OVPN_* environment variables.
+
+# Serve the admin UI under a secret prefix, e.g. https://host/panel/.
+admin_path = ""
+
+# Logging.
+log_level = "INFO"
+# log_file = "/var/log/ovpn-panel/panel.log"
+
+# Hosts allowed in the Host header (empty list or ["*"] allows any).
+trusted_hosts = ["*"]
+
+# Defaults for newly created VPN users.
+default_language = "en"
+default_theme = "system"

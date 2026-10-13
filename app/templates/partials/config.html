@@ -1,0 +1,7 @@
+<div class="modal card">
+  <h2>{{ t('users.config') }} — {{ vpn_user.username }}</h2>
+  <textarea rows="16" readonly>{{ config_text }}</textarea>
+  <div class="modal-actions">
+    <button type="button" class="btn" onclick="document.getElementById('modal').innerHTML=''">{{ t('common.cancel') }}</button>
+  </div>
+</div>

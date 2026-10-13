@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ t('login.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <form method="post" action="{{ base_path }}/login" class="card login-card">
+    <h1>{{ t('login.title') }}</h1>
+    {% if error %}<p class="alert alert-error">{{ t('login.failed') }}</p>{% endif %}
+    {% if locked %}<p class="alert alert-warn">{{ t('login.locked') }}</p>{% endif %}
+    <label>{{ t('login.username') }}
+      <input type="text" name="username" autocomplete="username" required autofocus
+             pattern="[a-zA-Z0-9_.-]{3,32}">
+    </label>
+    <label>{{ t('login.password') }}
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('login.submit') }}</button>
+  </form>
+</div>
+{% endblock %}

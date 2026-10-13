@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ t('users.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('users.title') }}</h1>
+  <div class="page-actions">
+    <button class="btn" hx-get="{{ base_path }}/partials/users/bulk/new" hx-target="#modal" hx-swap="innerHTML">
+      {{ t('users.bulk_new') }}
+    </button>
+    <a class="btn" href="{{ base_path }}/users/export.csv?search={{ search }}&status={{ status }}">{{ t('users.export_csv') }}</a>
+    <button class="btn btn-primary" hx-get="{{ base_path }}/partials/users/new" hx-target="#modal" hx-swap="innerHTML">
+      {{ t('users.new') }}
+    </button>
+  </div>
+</div>
+
+<form class="toolbar" method="get" action="{{ base_path }}/users">
+  <input type="search" name="search" value="{{ search }}" placeholder="{{ t('common.search') }}">
+  <select name="status">
+    <option value="">{{ t('users.filter_all') }}</option>
+    <option value="active" {{ 'selected' if status == 'active' else '' }}>{{ t('users.active') }}</option>
+    <option value="online" {{ 'selected' if status == 'online' else '' }}>{{ t('users.online') }}</option>
+    <option value="offline" {{ 'selected' if status == 'offline' else '' }}>{{ t('users.offline') }}</option>
+    <option value="disabled" {{ 'selected' if status == 'disabled' else '' }}>{{ t('users.disabled') }}</option>
+    <option value="expired" {{ 'selected' if status == 'expired' else '' }}>{{ t('users.expired') }}</option>
+  </select>
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ dir }}">
+  <button type="submit" class="btn">{{ t('common.search') }}</button>
+</form>
+
+<form id="bulk-form" hx-post="{{ base_path }}/partials/users/bulk/action?search={{ search }}&status={{ status }}&sort={{ sort }}&dir={{ dir }}&page={{ page }}"
+      hx-target="#users-panel" hx-swap="outerHTML">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="bulk-bar">
+    <span class="muted">{{ t('users.selected') }}</span>
+    <select name="action">
+      <option value="enable">{{ t('users.enable') }}</option>
+      <option value="disable">{{ t('users.disable') }}</option>
+      <option value="extend">{{ t('users.bulk_extend') }}</option>
+      <option value="reset-traffic">{{ t('users.reset_traffic') }}</option>
+      <option value="delete">{{ t('users.delete') }}</option>
+    </select>
+    <input type="number" name="days" min="0" value="30" title="{{ t('users.extend_days') }}">
+    <button type="submit" class="btn">{{ t('common.apply') }}</button>
+  </div>
+
+  <div id="users-panel">
+    {% include "partials/users_table.html" %}
+  </div>
+</form>
+<div id="modal"></div>
+{% endblock %}

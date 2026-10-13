@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if is_rtl else 'ltr' }}" data-theme="{{ theme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ branding['branding.name'] }} — {{ view.vpn_user.username }}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="app sub-page">
+  <main class="content">
+    <header class="sub-head">
+      {% if branding['branding.logo_url'] %}
+        <img class="sub-logo" src="{{ branding['branding.logo_url'] }}" alt="{{ branding['branding.name'] }}">
+      {% endif %}
+      <h1>{{ branding['branding.name'] }}</h1>
+      <p class="muted">{{ view.vpn_user.username }}</p>
+    </header>
+
+    <section class="card sub-status">
+      <div class="sub-status-row">
+        <span class="badge badge-{{ 'ok' if view.is_usable else 'off' }}">{{ view.vpn_user.status.value }}</span>
+        {% if view.vpn_user.is_online %}<span class="badge badge-on">{{ t('users.online') }}</span>{% endif %}
+      </div>
+      <dl class="sub-meta">
+        <dt>{{ t('sub.expires') }}</dt>
+        <dd>
+          {% set expiry = view.vpn_user.effective_expiry %}
+          {% if expiry %}{{ expiry.strftime('%Y-%m-%d %H:%M') }}
+          {% else %}{{ t('users.never') }}{% endif %}
+        </dd>
+        <dt>{{ t('sub.used') }}</dt>
+        <dd>{{ view.vpn_user.used_bytes | size }}</dd>
+        <dt>{{ t('sub.limit') }}</dt>
+        <dd>
+          {% if view.vpn_user.data_limit_bytes %}{{ view.vpn_user.data_limit_bytes | size }}
+          {% else %}{{ t('users.unlimited') }}{% endif %}
+        </dd>
+      </dl>
+      {% if view.vpn_user.data_limit_bytes %}
+      <div class="progress" title="{{ view.usage_percent }}%">
+        <div class="progress-bar" style="width: {{ view.usage_percent }}%"></div>
+      </div>
+      {% endif %}
+      {% if not view.is_usable %}
+      <p class="alert alert-error">
+        {% if view.vpn_user.status.value == 'expired' %}{{ t('sub.expired') }}
+        {% elif view.vpn_user.quota_exceeded %}{{ t('sub.quota_exceeded') }}
+        {% else %}{{ t('sub.inactive') }}{% endif %}
+      </p>
+      {% endif %}
+    </section>
+
+    <section class="sub-nodes">
+      <h2>{{ t('sub.nodes') }}</h2>
+      {% for entry in view.nodes %}
+      <article class="card sub-node">
+        <div class="sub-node-head">
+          <h3>{{ entry.node.name }}</h3>
+          <span class="badge badge-{{ 'ok' if entry.node.status.value == 'online' else 'off' }}">{{ entry.node.status.value }}</span>
+        </div>
+        <p class="muted mono">{{ entry.remote }}</p>
+        <div class="sub-node-body">
+          <img class="sub-qr" src="{{ base_path }}/sub/{{ token }}/qr.svg?node_id={{ entry.node.id }}"
+               alt="{{ t('sub.qr') }}" width="176" height="176">
+          <div class="sub-node-actions">
+            <a class="btn btn-primary" href="{{ base_path }}/sub/{{ token }}/config/{{ entry.node.id }}.ovpn">
+              {{ t('sub.download') }}
+            </a>
+            <button type="button" class="btn" data-copy="{{ base_path }}/sub/{{ token }}/config/{{ entry.node.id }}.ovpn">
+              {{ t('sub.copy_link') }}
+            </button>
+          </div>
+        </div>
+      </article>
+      {% else %}
+      <p class="muted">{{ t('sub.no_nodes') }}</p>
+      {% endfor %}
+    </section>
+
+    {% if view.has_protocol_links %}
+    <section class="sub-nodes">
+      <h2>{{ t('sub.protocols') }}</h2>
+      <article class="card sub-node">
+        <div class="sub-node-head">
+          <h3>{{ t('sub.aggregated') }}</h3>
+        </div>
+        <p class="muted mono">{{ view.aggregated_link }}</p>
+        <div class="sub-node-body">
+          <img class="sub-qr" src="{{ base_path }}/sub/{{ token }}/protocol-qr.svg"
+               alt="{{ t('sub.qr') }}" width="176" height="176">
+          <div class="sub-node-actions">
+            <a class="btn btn-primary" href="{{ base_path }}/sub/{{ token }}/subscription.txt">
+              {{ t('sub.download') }}
+            </a>
+            <button type="button" class="btn" data-copy="{{ base_path }}/sub/{{ token }}/subscription.txt">
+              {{ t('sub.copy_link') }}
+            </button>
+          </div>
+        </div>
+      </article>
+      {% for link in view.protocols %}
+      <article class="card sub-node">
+        <div class="sub-node-head">
+          <h3>{{ link.kind }}</h3>
+        </div>
+        {% if link.uri %}<p class="muted mono">{{ link.uri }}</p>{% endif %}
+        {% if link.uri %}
+        <img class="sub-qr" src="{{ base_path }}/sub/{{ token }}/protocol-qr.svg?kind={{ link.kind }}"
+             alt="{{ t('sub.qr') }}" width="176" height="176">
+        {% endif %}
+      </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if branding['branding.support_url'] %}
+    <p class="sub-support"><a href="{{ branding['branding.support_url'] }}">{{ t('sub.support') }}</a></p>
+    {% endif %}
+    {% if branding['branding.footer'] %}
+    <footer class="sub-footer muted">{{ branding['branding.footer'] }}</footer>
+    {% endif %}
+  </main>
+  <script>
+    document.querySelectorAll('[data-copy]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var url = new URL(btn.getAttribute('data-copy'), window.location.origin).href;
+        if (navigator.clipboard) { navigator.clipboard.writeText(url); }
+        btn.textContent = '✓';
+      });
+    });
+  </script>
+</body>
+</html>

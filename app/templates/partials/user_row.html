@@ -1,0 +1,32 @@
+<tr id="user-{{ u.id }}">
+  <td><input type="checkbox" class="row-check" name="ids" value="{{ u.id }}"></td>
+  <td>{{ u.username }}</td>
+  <td>
+    <span class="badge badge-{{ 'ok' if u.status.value == 'active' else 'off' }}">{{ u.status.value }}</span>
+    {% if u.is_online %}<span class="badge badge-on">{{ t('users.online') }}</span>{% endif %}
+  </td>
+  <td>
+    {% if u.expires_at %}{{ u.expires_at }}
+    {% elif u.expire_days is not none %}{{ u.expire_days }} {{ t('users.days') }}
+    {% else %}{{ t('users.never') }}{% endif %}
+  </td>
+  <td>{{ u.data_limit_bytes | size }}</td>
+  <td>{{ u.bytes_in | size }}</td>
+  <td>{{ u.bytes_out | size }}</td>
+  <td class="actions">
+    {% if u.status.value == 'active' %}
+    <button class="btn btn-sm" hx-post="{{ base_path }}/partials/users/{{ u.id }}/disable" hx-target="#user-{{ u.id }}" hx-swap="outerHTML">{{ t('users.disable') }}</button>
+    {% else %}
+    <button class="btn btn-sm" hx-post="{{ base_path }}/partials/users/{{ u.id }}/enable" hx-target="#user-{{ u.id }}" hx-swap="outerHTML">{{ t('users.enable') }}</button>
+    {% endif %}
+    {% if u.is_online %}
+    <button class="btn btn-sm" hx-post="{{ base_path }}/partials/users/{{ u.id }}/kick" hx-target="#user-{{ u.id }}" hx-swap="outerHTML">{{ t('users.kick') }}</button>
+    {% endif %}
+    <button class="btn btn-sm" hx-post="{{ base_path }}/partials/users/{{ u.id }}/reset-password" hx-target="#modal" hx-swap="innerHTML">{{ t('users.reset_password') }}</button>
+    <button class="btn btn-sm" hx-post="{{ base_path }}/partials/users/{{ u.id }}/reset-traffic" hx-target="#user-{{ u.id }}" hx-swap="outerHTML">{{ t('users.reset_traffic') }}</button>
+    <button class="btn btn-sm" hx-get="{{ base_path }}/partials/users/{{ u.id }}/config" hx-target="#modal" hx-swap="innerHTML">{{ t('users.config') }}</button>
+    <button class="btn btn-sm" hx-get="{{ base_path }}/partials/users/{{ u.id }}/subscription" hx-target="#modal" hx-swap="innerHTML">{{ t('users.subscription') }}</button>
+    <button class="btn btn-sm" hx-get="{{ base_path }}/partials/users/{{ u.id }}/protocols" hx-target="#modal" hx-swap="innerHTML">{{ t('protocols.enable_for_user') }}</button>
+    <button class="btn btn-sm btn-danger" hx-delete="{{ base_path }}/partials/users/{{ u.id }}" hx-target="#user-{{ u.id }}" hx-swap="outerHTML" hx-confirm="{{ t('users.delete_confirm') }}">{{ t('users.delete') }}</button>
+  </td>
+</tr>

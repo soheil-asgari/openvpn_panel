@@ -1,0 +1,18 @@
+<div id="mtu-result">
+  {% if result.ok %}
+  <p>
+    <span class="badge badge-ok">{{ t('tunnels.mtu_ok') }}</span>
+    MTU <strong>{{ result.mtu }}</strong>, mssfix <strong>{{ result.mssfix }}</strong>
+    <span class="muted">({{ t('tunnels.target') }}: {{ result.target }})</span>
+  </p>
+  <button class="btn btn-primary" hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/apply-mtu" hx-target="#mtu-apply">{{ t('tunnels.apply_to_instance') }}</button>
+  <span id="mtu-apply"></span>
+  {% else %}
+  <p class="alert alert-error">{{ result.detail or t('common.error') }}</p>
+  {% endif %}
+  <form hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/mtu" hx-target="#mtu-box" hx-swap="innerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="inline"><input type="checkbox" name="apply" value="on"> {{ t('tunnels.apply_mtu') }}</label>
+    <button type="submit" class="btn">{{ t('tunnels.find_mtu') }}</button>
+  </form>
+</div>

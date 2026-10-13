@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ t('reports.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('reports.title') }}{% if report.owner_label %} — {{ report.owner_label }}{% endif %}</h1>
+</div>
+
+<form class="toolbar" method="get" action="{{ base_path }}/reports">
+  <select name="preset">
+    <option value="daily" {{ 'selected' if preset == 'daily' else '' }}>{{ t('reports.daily') }}</option>
+    <option value="weekly" {{ 'selected' if preset == 'weekly' else '' }}>{{ t('reports.weekly') }}</option>
+    <option value="monthly" {{ 'selected' if preset == 'monthly' else '' }}>{{ t('reports.monthly') }}</option>
+    <option value="custom" {{ 'selected' if preset == 'custom' else '' }}>{{ t('reports.custom') }}</option>
+  </select>
+  <input type="date" name="start" value="{{ start }}">
+  <input type="date" name="end" value="{{ end }}">
+  {% if user.is_admin %}
+  <select name="reseller_id">
+    <option value="0">{{ t('reports.all_resellers') }}</option>
+    {% for r in resellers %}
+    <option value="{{ r.id }}" {{ 'selected' if reseller_id == r.id else '' }}>{{ r.username }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  <button type="submit" class="btn">{{ t('common.apply') }}</button>
+</form>
+
+<div class="grid stats">
+  <div class="card stat">
+    <span class="stat-label">{{ t('reports.download') }}</span>
+    <span class="stat-value">{{ report.totals.bytes_in | size }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('reports.upload') }}</span>
+    <span class="stat-value">{{ report.totals.bytes_out | size }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('reports.total') }}</span>
+    <span class="stat-value">{{ report.totals.total | size }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">{{ t('reports.users') }}</span>
+    <span class="stat-value">{{ report.totals.users }}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('reports.period') }}: {{ report.start.strftime('%Y-%m-%d') }} → {{ report.end.strftime('%Y-%m-%d') }}</h2>
+  <canvas id="report-chart" height="120"></canvas>
+  <script type="application/json" id="report-data">
+    {{ {"labels": report.labels, "bytes_in": report.series_in, "bytes_out": report.series_out} | tojson }}
+  </script>
+</div>
+
+{% if report.by_node %}
+<div class="card">
+  <h2>{{ t('reports.by_node') }}</h2>
+  <table class="table">
+    <thead><tr><th>{{ t('nodes.name') }}</th><th>{{ t('reports.total') }}</th></tr></thead>
+    <tbody>
+      {% for name, total in report.by_node %}
+      <tr><td>{{ name }}</td><td>{{ total | size }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+  (function () {
+    var canvas = document.getElementById("report-chart");
+    var dataEl = document.getElementById("report-data");
+    if (!canvas || !dataEl || typeof window.Chart === "undefined") return;
+    var payload = JSON.parse(dataEl.textContent);
+    new window.Chart(canvas, {
+      type: "line",
+      data: {
+        labels: payload.labels,
+        datasets: [
+          { label: "{{ t('users.download') }}", data: payload.bytes_in, borderColor: "#2563eb", tension: 0.3 },
+          { label: "{{ t('users.upload') }}", data: payload.bytes_out, borderColor: "#16a34a", tension: 0.3 }
+        ]
+      },
+      options: { responsive: true }
+    });
+  })();
+</script>
+{% endblock %}

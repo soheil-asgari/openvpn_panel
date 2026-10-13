@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ t('audit.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('audit.title') }}</h1>
+</div>
+
+<form class="toolbar" method="get" action="{{ base_path }}/audit">
+  <select name="action">
+    <option value="">{{ t('audit.all_actions') }}</option>
+    {% for a in actions %}
+    <option value="{{ a }}" {{ 'selected' if action == a else '' }}>{{ a }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">{{ t('common.search') }}</button>
+</form>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>{{ t('audit.when') }}</th>
+      <th>{{ t('audit.actor') }}</th>
+      <th>{{ t('audit.action') }}</th>
+      <th>{{ t('audit.target') }}</th>
+      <th>{{ t('audit.ip') }}</th>
+      <th>{{ t('audit.detail') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr>
+      <td>{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      <td>{{ e.actor_label or '—' }}</td>
+      <td><span class="badge">{{ e.action }}</span></td>
+      <td>{{ e.target_type or '' }}{% if e.target_id %} #{{ e.target_id }}{% endif %}</td>
+      <td class="mono">{{ e.ip_address or '—' }}</td>
+      <td class="muted">{{ e.detail or '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">—</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div class="pager">
+  <span class="muted">{{ t('users.total') }}: {{ total }}</span>
+  {% if page > 1 %}<a class="btn btn-sm" href="{{ base_path }}/audit?action={{ action }}&page={{ page - 1 }}">‹</a>{% endif %}
+  <span>{{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-sm" href="{{ base_path }}/audit?action={{ action }}&page={{ page + 1 }}">›</a>{% endif %}
+</div>
+{% endblock %}

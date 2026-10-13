@@ -1,0 +1,21 @@
+<div id="tunnel-job-status">
+  {% if job %}
+  <p>
+    <span class="badge badge-{{ 'ok' if job.status.value == 'done' else ('warn' if job.status.value == 'running' else 'off') }}">{{ job.status.value }}</span>
+    {% if job.step %}<span class="muted">{{ t('tunnels.step') }}: {{ job.step }}</span>{% endif %}
+    {% if job.rolled_back %}<span class="badge badge-warn">{{ t('tunnels.rolled_back') }}</span>{% endif %}
+  </p>
+  <div class="progress" title="{{ job.progress }}%">
+    <div class="progress-bar" style="width: {{ job.progress }}%"></div>
+  </div>
+  {% if job.error %}<p class="alert alert-error">{{ job.error }}</p>{% endif %}
+  <pre class="mono log-view">{{ job.log }}</pre>
+  {% if job.status.value in ['failed', 'rolled_back'] %}
+  <div class="page-actions">
+    <button class="btn" hx-post="{{ base_path }}/partials/tunnels/{{ tunnel_id }}/retry" hx-target="#job" hx-swap="innerHTML">{{ t('tunnels.retry') }}</button>
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="muted">{{ t('tunnels.no_job') }}</p>
+  {% endif %}
+</div>

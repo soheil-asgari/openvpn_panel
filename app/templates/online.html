@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ t('online.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('online.title') }}</h1>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>{{ t('users.username') }}</th>
+      <th>{{ t('users.download') }}</th>
+      <th>{{ t('users.upload') }}</th>
+      <th>{{ t('users.connected_ip') }}</th>
+      <th>{{ t('users.actions') }}</th>
+    </tr>
+  </thead>
+  <tbody id="online-body">
+    {% for u in users %}
+    <tr id="online-{{ u.id }}">
+      <td>{{ u.username }}</td>
+      <td>{{ u.bytes_in | size }}</td>
+      <td>{{ u.bytes_out | size }}</td>
+      <td>{{ u.connected_ip or '—' }}</td>
+      <td class="actions">
+        <button class="btn btn-sm btn-danger" hx-post="{{ base_path }}/partials/online/{{ u.id }}/kick" hx-target="#online-{{ u.id }}" hx-swap="outerHTML" hx-confirm="{{ t('users.kick_confirm') }}">{{ t('users.kick') }}</button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">—</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

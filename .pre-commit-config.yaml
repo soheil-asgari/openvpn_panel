@@ -1,0 +1,43 @@
+# Pre-commit hooks for OpenVPN Web Panel.
+# Install with: pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: ^scripts/.*\.sh$
+
+  # Secret scanning — blocks any commit that introduces a secret, so a leak can
+  # never regress. Uses the repository .gitleaks.toml allowlist.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # Fail if anyone points an install command at a mutable branch.
+  - repo: local
+    hooks:
+      - id: no-main-branch-install-url
+        name: reject main/master install URLs
+        entry: bash -c '! grep -RInE "raw\.githubusercontent\.com/[^/[:space:]]+/[^/[:space:]]+/(main|master)/" --include="*.sh" --include="*.md" --include="*.yml" --include="*.html" --exclude-dir=.venv --exclude-dir=.git .'
+        language: system
+        pass_filenames: false

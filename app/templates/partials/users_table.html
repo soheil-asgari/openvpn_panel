@@ -1,0 +1,33 @@
+<div id="users-panel">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" onclick="document.querySelectorAll('.row-check').forEach(c=>c.checked=this.checked)"></th>
+        <th><a href="{{ base_path }}/users?search={{ search }}&status={{ status }}&sort=username&dir={{ 'desc' if sort=='username' and dir=='asc' else 'asc' }}">{{ t('users.username') }}</a></th>
+        <th>{{ t('users.status') }}</th>
+        <th><a href="{{ base_path }}/users?search={{ search }}&status={{ status }}&sort=expires_at&dir={{ 'desc' if sort=='expires_at' and dir=='asc' else 'asc' }}">{{ t('users.expires') }}</a></th>
+        <th>{{ t('users.data_limit') }}</th>
+        <th><a href="{{ base_path }}/users?search={{ search }}&status={{ status }}&sort=bytes_in&dir={{ 'desc' if sort=='bytes_in' and dir=='asc' else 'asc' }}">{{ t('users.download') }}</a></th>
+        <th><a href="{{ base_path }}/users?search={{ search }}&status={{ status }}&sort=bytes_out&dir={{ 'desc' if sort=='bytes_out' and dir=='asc' else 'asc' }}">{{ t('users.upload') }}</a></th>
+        <th>{{ t('users.actions') }}</th>
+      </tr>
+    </thead>
+    <tbody id="users-body">
+      {% for u in users %}
+        {% include "partials/user_row.html" %}
+      {% else %}
+        <tr><td colspan="8" class="muted">—</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="pager">
+    <span class="muted">{{ t('users.total') }}: {{ total }}</span>
+    {% if page > 1 %}
+      <a class="btn btn-sm" href="{{ base_path }}/users?search={{ search }}&status={{ status }}&sort={{ sort }}&dir={{ dir }}&page={{ page - 1 }}">‹</a>
+    {% endif %}
+    <span>{{ page }} / {{ pages }}</span>
+    {% if page < pages %}
+      <a class="btn btn-sm" href="{{ base_path }}/users?search={{ search }}&status={{ status }}&sort={{ sort }}&dir={{ dir }}&page={{ page + 1 }}">›</a>
+    {% endif %}
+  </div>
+</div>

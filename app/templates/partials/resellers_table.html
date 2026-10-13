@@ -1,0 +1,50 @@
+<div id="resellers-panel">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{ t('users.username') }}</th>
+        <th>{{ t('resellers.quota') }}</th>
+        <th>{{ t('resellers.data_quota') }}</th>
+        <th>{{ t('resellers.nodes') }}</th>
+        <th>{{ t('resellers.expires') }}</th>
+        <th>{{ t('users.status') }}</th>
+        <th>{{ t('users.actions') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr id="reseller-{{ row.user.id }}">
+        <td>{{ row.user.username }}</td>
+        <td>
+          {{ row.usage.user_count }}
+          {% if row.usage.quota_users is not none %} / {{ row.usage.quota_users }}{% else %} / ∞{% endif %}
+        </td>
+        <td>
+          {{ row.usage.data_bytes | size }}
+          {% if row.usage.max_data_bytes is not none %} / {{ row.usage.max_data_bytes | size }}{% else %} / ∞{% endif %}
+        </td>
+        <td>
+          {% if not row.user.restrict_nodes %}{{ t('resellers.all_nodes') }}
+          {% elif row.nodes %}{% for n in row.nodes %}<span class="badge">{{ n.name }}</span> {% endfor %}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>{% if row.user.expires_at %}{{ row.user.expires_at.strftime('%Y-%m-%d') }}{% else %}{{ t('users.never') }}{% endif %}</td>
+        <td>
+          <span class="badge badge-{{ 'ok' if row.user.is_active and not row.expired else 'off' }}">
+            {{ 'expired' if row.expired else ('active' if row.user.is_active else 'disabled') }}
+          </span>
+        </td>
+        <td class="actions">
+          <button class="btn btn-sm" hx-get="{{ base_path }}/partials/resellers/{{ row.user.id }}/edit" hx-target="#modal" hx-swap="innerHTML">{{ t('common.edit') }}</button>
+          <button class="btn btn-sm" hx-get="{{ base_path }}/partials/resellers/{{ row.user.id }}/usage" hx-target="#modal" hx-swap="innerHTML">{{ t('reports.title') }}</button>
+          <button class="btn btn-sm btn-danger" hx-delete="{{ base_path }}/partials/resellers/{{ row.user.id }}"
+                  hx-target="#reseller-{{ row.user.id }}" hx-swap="outerHTML"
+                  hx-confirm="{{ t('resellers.delete_confirm') }}">{{ t('users.delete') }}</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">—</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

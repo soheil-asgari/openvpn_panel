@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="card error-card">
+  <h1>{{ code }}</h1>
+  <p>{{ detail }}</p>
+  <a href="{{ base_path }}/" class="btn">{{ t('nav.dashboard') }}</a>
+</div>
+{% endblock %}

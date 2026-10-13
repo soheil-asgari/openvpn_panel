@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ t('tunnels.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('tunnels.title') }}</h1>
+  <div class="page-actions">
+    <a class="btn btn-primary" href="{{ base_path }}/tunnels/new">{{ t('tunnels.new') }}</a>
+  </div>
+</div>
+
+<div class="grid stats">
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.total') }}</span><span class="stat-value">{{ summary.total }}</span></div>
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.active') }}</span><span class="stat-value">{{ summary.active }}</span></div>
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.degraded') }}</span><span class="stat-value">{{ summary.degraded }}</span></div>
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.error') }}</span><span class="stat-value">{{ summary.error }}</span></div>
+</div>
+
+<div class="card">
+  <div id="tunnels-body">
+    {% include "partials/tunnels_table.html" %}
+  </div>
+</div>
+
+<div class="card muted">
+  <h2>{{ t('tunnels.backends') }}</h2>
+  <table class="table">
+    <thead><tr><th>{{ t('tunnels.backend') }}</th><th>{{ t('tunnels.transports') }}</th><th>UDP</th><th>{{ t('tunnels.license') }}</th><th>{{ t('tunnels.upstream') }}</th></tr></thead>
+    <tbody>
+      {% for b in backends %}
+      <tr>
+        <td class="mono">{{ b.kind }}</td>
+        <td>{{ b.transports | join(', ') }}</td>
+        <td>{{ '✔' if b.supports_udp else '—' }}</td>
+        <td>{{ b.license }}</td>
+        <td><a href="{{ b.upstream }}" rel="noopener noreferrer">{{ b.upstream }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

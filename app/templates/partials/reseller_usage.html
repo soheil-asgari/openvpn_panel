@@ -1,0 +1,39 @@
+<div class="modal card">
+  <h2>{{ t('reports.title') }} — {{ reseller.username }}</h2>
+  <dl class="sub-meta">
+    <dt>{{ t('resellers.users_count') }}</dt>
+    <dd>{{ usage.user_count }}{% if usage.quota_users is not none %} / {{ usage.quota_users }}{% endif %}</dd>
+    <dt>{{ t('reports.total') }}</dt>
+    <dd>{{ usage.data_bytes | size }}{% if usage.max_data_bytes is not none %} / {{ usage.max_data_bytes | size }}{% endif %}</dd>
+    <dt>{{ t('reports.period') }}</dt>
+    <dd>{{ report.preset }} ({{ report.start.strftime('%Y-%m-%d') }} → {{ report.end.strftime('%Y-%m-%d') }})</dd>
+    <dt>{{ t('reports.in_range') }}</dt>
+    <dd>{{ report.totals.total | size }}</dd>
+  </dl>
+  <canvas id="reseller-usage-chart" height="140"></canvas>
+  <script type="application/json" id="reseller-usage-data">
+    {{ {"labels": report.labels, "bytes_in": report.series_in, "bytes_out": report.series_out} | tojson }}
+  </script>
+  <div class="modal-actions">
+    <button type="button" class="btn" onclick="document.getElementById('modal').innerHTML=''">{{ t('common.close') }}</button>
+  </div>
+</div>
+<script>
+  (function () {
+    var canvas = document.getElementById("reseller-usage-chart");
+    var dataEl = document.getElementById("reseller-usage-data");
+    if (!canvas || !dataEl || typeof window.Chart === "undefined") return;
+    var payload = JSON.parse(dataEl.textContent);
+    new window.Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: payload.labels,
+        datasets: [
+          { label: "{{ t('users.download') }}", data: payload.bytes_in, backgroundColor: "#2563eb" },
+          { label: "{{ t('users.upload') }}", data: payload.bytes_out, backgroundColor: "#16a34a" }
+        ]
+      },
+      options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true } } }
+    });
+  })();
+</script>

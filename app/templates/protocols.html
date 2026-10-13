@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}{{ t('protocols.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('protocols.title') }}</h1>
+</div>
+
+{% if request.query_params.get('error') %}
+<p class="alert alert-error">{{ t('common.error') }}: {{ request.query_params.get('error') }}</p>
+{% elif request.query_params.get('ok') %}
+<p class="alert">{{ t('protocols.installed') }}</p>
+{% endif %}
+
+<section class="card">
+  <h2>{{ t('protocols.backends') }}</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{ t('protocols.kind') }}</th>
+        <th>{{ t('protocols.capabilities') }}</th>
+        <th>{{ t('protocols.license') }}</th>
+        <th>{{ t('protocols.upstream') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in backends %}
+      <tr>
+        <td>{{ b.display_name }}</td>
+        <td class="muted">{{ b.capabilities | join(', ') }}</td>
+        <td class="muted">{{ b.license }}</td>
+        <td class="muted"><a href="{{ b.upstream }}" rel="noopener noreferrer">{{ b.upstream }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>{{ t('protocols.new') }}</h2>
+  <form method="post" action="{{ base_path }}/protocols" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('protocols.kind') }}
+      <select name="kind">
+        {% for b in backends %}<option value="{{ b.kind }}">{{ b.display_name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>{{ t('protocols.name') }}
+      <input type="text" name="name" required pattern="[a-zA-Z0-9_.-]{2,32}" placeholder="wg0">
+    </label>
+    <label>{{ t('nodes.title') }}
+      <select name="node_id">
+        <option value="0">—</option>
+        {% for n in nodes %}<option value="{{ n.id }}">{{ n.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>{{ t('protocols.port') }}
+      <input type="number" name="port" min="0" max="65535" value="0">
+    </label>
+    <label>{{ t('protocols.address') }}
+      <input type="text" name="address" placeholder="10.66.0.1">
+    </label>
+    <label>{{ t('protocols.subnet') }}
+      <input type="text" name="subnet" placeholder="10.66.0.0/24">
+    </label>
+    <label>{{ t('protocols.dns') }}
+      <input type="text" name="dns" placeholder="1.1.1.1">
+    </label>
+    <label>{{ t('protocols.mtu') }}
+      <input type="number" name="mtu" min="576" max="9000" value="0">
+    </label>
+    <label>{{ t('protocols.inbound') }}
+      <select name="inbound_type">
+        <option value="vless">VLESS</option>
+        <option value="vmess">VMess</option>
+        <option value="trojan">Trojan</option>
+        <option value="shadowsocks">Shadowsocks</option>
+        <option value="hysteria2">Hysteria2</option>
+      </select>
+    </label>
+    <label>{{ t('protocols.security') }}
+      <select name="security">
+        <option value="reality">Reality</option>
+        <option value="tls">TLS</option>
+        <option value="none">None</option>
+      </select>
+    </label>
+    <label>{{ t('protocols.sni') }}
+      <input type="text" name="sni" placeholder="www.bing.com">
+    </label>
+    <label>{{ t('protocols.psk') }}
+      <input type="text" name="psk" placeholder="L2TP/IPsec PSK">
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="is_default" checked> {{ t('protocols.default') }}
+    </label>
+    <div class="modal-actions">
+      <button type="submit" class="btn btn-primary">{{ t('common.save') }}</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ t('protocols.instances') }}</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{ t('protocols.kind') }}</th>
+        <th>{{ t('protocols.name') }}</th>
+        <th>{{ t('nodes.title') }}</th>
+        <th>{{ t('protocols.port') }}</th>
+        <th>{{ t('protocols.status') }}</th>
+        <th>{{ t('protocols.users') }}</th>
+        <th>{{ t('protocols.version') }}</th>
+        <th>{{ t('users.actions') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.instance.kind }}</td>
+        <td>{{ row.instance.name }}</td>
+        <td>{{ row.node.name if row.node else '—' }}</td>
+        <td>{{ row.instance.port }}</td>
+        <td><span class="badge badge-{{ 'ok' if row.instance.status.value == 'active' else 'off' }}">{{ row.instance.status.value }}</span></td>
+        <td>{{ row.users }}</td>
+        <td class="muted">{{ row.instance.version or '—' }}</td>
+        <td class="actions">
+          <form method="post" action="{{ base_path }}/protocols/{{ row.instance.id }}/install" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-sm">{{ t('protocols.install') }}</button>
+          </form>
+          <form method="post" action="{{ base_path }}/protocols/{{ row.instance.id }}/health" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-sm">{{ t('protocols.check') }}</button>
+          </form>
+          <form method="post" action="{{ base_path }}/protocols/{{ row.instance.id }}/delete" class="inline"
+                onsubmit="return confirm('{{ t('common.confirm') }}')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-sm btn-danger">{{ t('users.delete') }}</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="muted">—</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

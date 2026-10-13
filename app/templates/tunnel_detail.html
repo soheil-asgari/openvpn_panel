@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ tunnel.name }} — {{ t('tunnels.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ tunnel.name }}</h1>
+  <div class="page-actions">
+    <span class="badge badge-{{ 'ok' if tunnel.status.value == 'active' else ('warn' if tunnel.status.value in ['degraded','provisioning'] else 'off') }}">{{ tunnel.status.value }}</span>
+    {% if tunnel.backend_version %}<span class="muted">{{ t('tunnels.version') }}: {{ tunnel.backend_version }}</span>{% endif %}
+  </div>
+</div>
+
+<div class="grid stats">
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.latency') }}</span><span class="stat-value">{% if sample %}{{ '%.1f' | format(sample.latency_ms) }} ms{% else %}—{% endif %}</span></div>
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.loss') }}</span><span class="stat-value">{% if sample %}{{ '%.1f' | format(sample.packet_loss) }}%{% else %}—{% endif %}</span></div>
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.throughput') }}</span><span class="stat-value">{% if sample %}{{ '%.0f' | format(sample.throughput_kbps) }} kbps{% else %}—{% endif %}</span></div>
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.failures') }}</span><span class="stat-value">{{ tunnel.consecutive_failures }}</span></div>
+  <div class="card stat"><span class="stat-label">{{ t('tunnels.mtu') }}</span><span class="stat-value">{{ tunnel.mtu or '—' }}</span></div>
+</div>
+
+<div class="card">
+  <h2>{{ t('tunnels.actions') }}</h2>
+  <div class="page-actions">
+    <button class="btn" hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/start" hx-target="#job" hx-swap="innerHTML">{{ t('tunnels.start') }}</button>
+    <button class="btn" hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/stop" hx-target="#job" hx-swap="innerHTML">{{ t('tunnels.stop') }}</button>
+    <button class="btn" hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/restart" hx-target="#job" hx-swap="innerHTML">{{ t('tunnels.restart') }}</button>
+    <button class="btn" hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/update" hx-target="#job" hx-swap="innerHTML">{{ t('tunnels.update') }}</button>
+    <button class="btn btn-danger" hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/rollback" hx-target="#job" hx-swap="innerHTML">{{ t('tunnels.rollback') }}</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('tunnels.fingerprint') }}</h2>
+  <div id="fingerprint-box"
+       hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/fingerprint"
+       hx-trigger="load" hx-swap="innerHTML">
+    <span class="muted">…</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('tunnels.mtu_finder') }}</h2>
+  <div id="mtu-box">
+    <form hx-post="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/mtu" hx-target="#mtu-box" hx-swap="innerHTML">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="inline"><input type="checkbox" name="apply" value="on"> {{ t('tunnels.apply_mtu') }}</label>
+      <button type="submit" class="btn">{{ t('tunnels.find_mtu') }}</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('tunnels.progress') }}</h2>
+  <div id="job"
+       hx-get="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/job"
+       hx-trigger="every 2s" hx-swap="innerHTML">
+    {% include "partials/tunnel_job.html" %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('tunnels.logs') }}</h2>
+  <div id="tunnel-logs"
+       hx-get="{{ base_path }}/partials/tunnels/{{ tunnel.id }}/logs"
+       hx-trigger="load, every 5s" hx-swap="innerHTML">
+    <span class="muted">…</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('tunnels.health') }}</h2>
+  <canvas id="tunnel-health-chart" width="800" height="220"></canvas>
+</div>
+
+<div class="card">
+  <h2>{{ t('tunnels.details') }}</h2>
+  <dl class="sub-meta">
+    <dt>{{ t('tunnels.entry_host') }}</dt><dd>{{ tunnel.entry_host }}:{{ tunnel.entry_ssh_port }}</dd>
+    <dt>{{ t('tunnels.control_port') }}</dt><dd>{{ tunnel.control_port }}</dd>
+    <dt>{{ t('tunnels.public_ports') }}</dt><dd class="mono">{{ tunnel.port_list() | join(', ') or '—' }}</dd>
+    <dt>{{ t('tunnels.exit_host') }}</dt><dd>{{ tunnel.exit_host or '—' }}</dd>
+    <dt>{{ t('tunnels.instance') }}</dt><dd>{{ tunnel.instance_name or '—' }}</dd>
+    <dt>{{ t('tunnels.upstream') }}</dt><dd>{{ tunnel.backend.value }}</dd>
+  </dl>
+</div>
+
+<div id="modal"></div>
+<script>
+  (function () {
+    var canvas = document.getElementById('tunnel-health-chart');
+    if (!canvas || typeof window.Chart === 'undefined') return;
+    var labels = {{ history | map(attribute='recorded_at') | map('string') | list | tojson }};
+    var latency = {{ history | map(attribute='latency_ms') | list | tojson }};
+    new window.Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: [{ label: 'ms', data: latency, borderColor: '#2563eb', tension: 0.3 }] },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+  })();
+</script>
+{% endblock %}

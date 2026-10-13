@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenVPN Web Panel privileged helper
+After=network.target
+Before=ovpn-panel.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+Environment=OVPN_HELPER_SOCKET=/run/ovpn-panel/helper.sock
+WorkingDirectory=/opt/ovpn-panel
+ExecStartPre=/bin/mkdir -p /run/ovpn-panel
+ExecStartPre=/bin/chown root:ovpn-panel /run/ovpn-panel
+ExecStartPre=/bin/chmod 0750 /run/ovpn-panel
+ExecStart=/opt/ovpn-panel/.venv/bin/python -m helper.server
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

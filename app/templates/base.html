@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if is_rtl else 'ltr' }}" data-theme="{{ theme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}{{ panel_title | default(t('app.name')) }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/chart.min.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body class="app">
+  {% if user %}
+  <header class="topbar">
+    <span class="brand">
+      {% if branding and branding['branding.logo_url'] %}<img class="brand-logo" src="{{ branding['branding.logo_url'] }}" alt="">{% endif %}
+      {{ panel_title | default(t('app.name')) }}
+    </span>
+    <nav class="nav">
+      <a href="{{ base_path }}/" class="{{ 'active' if active == 'dashboard' else '' }}">{{ t('nav.dashboard') }}</a>
+      <a href="{{ base_path }}/users" class="{{ 'active' if active == 'users' else '' }}">{{ t('nav.users') }}</a>
+      <a href="{{ base_path }}/online" class="{{ 'active' if active == 'online' else '' }}">{{ t('nav.online') }}</a>
+      <a href="{{ base_path }}/nodes" class="{{ 'active' if active == 'nodes' else '' }}">{{ t('nav.nodes') }}</a>
+      {% if user.is_admin %}<a href="{{ base_path }}/protocols" class="{{ 'active' if active == 'protocols' else '' }}">{{ t('nav.protocols') }}</a>{% endif %}
+      {% if user.is_admin %}<a href="{{ base_path }}/tunnels" class="{{ 'active' if active == 'tunnels' else '' }}">{{ t('nav.tunnels') }}</a>{% endif %}
+      {% if user.is_admin %}<a href="{{ base_path }}/resellers" class="{{ 'active' if active == 'resellers' else '' }}">{{ t('nav.resellers') }}</a>{% endif %}
+      <a href="{{ base_path }}/reports" class="{{ 'active' if active == 'reports' else '' }}">{{ t('nav.reports') }}</a>
+      <a href="{{ base_path }}/permissions" class="{{ 'active' if active == 'permissions' else '' }}">{{ t('nav.permissions') }}</a>
+      {% if user.is_admin %}<a href="{{ base_path }}/audit" class="{{ 'active' if active == 'audit' else '' }}">{{ t('nav.audit') }}</a>{% endif %}
+      {% if user.is_admin %}<a href="{{ base_path }}/settings/server-config" class="{{ 'active' if active == 'settings' else '' }}">{{ t('nav.server_config') }}</a>{% endif %}
+      <a href="{{ base_path }}/settings" class="{{ 'active' if active == 'settings' else '' }}">{{ t('nav.settings') }}</a>
+    </nav>
+    <div class="topbar-right">
+      <button type="button" class="icon-btn" data-theme-toggle title="{{ t('theme.toggle') }}">◐</button>
+      <form method="post" action="{{ base_path }}/logout" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="link-btn">{{ t('nav.logout') }}</button>
+      </form>
+    </div>
+  </header>
+  {% endif %}
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+  <div id="toast" class="toast" hidden></div>
+</body>
+</html>

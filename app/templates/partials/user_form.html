@@ -1,0 +1,34 @@
+<div class="modal card">
+  <h2>{{ t('users.new') }}</h2>
+  <form hx-post="{{ base_path }}/partials/users" hx-target="#users-body" hx-swap="beforeend">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>{{ t('users.username') }}
+      <input type="text" name="username" required pattern="[a-zA-Z0-9_.-]{3,32}">
+    </label>
+    <label>{{ t('login.password') }}
+      <input type="text" name="password" required minlength="8">
+    </label>
+    <label>{{ t('users.data_limit') }} (MB)
+      <input type="number" name="data_limit_mb" min="0" value="0">
+    </label>
+    <label>{{ t('users.expire_days') }}
+      <input type="number" name="expire_days" min="0" value="0">
+    </label>
+    <label>{{ t('users.max_connections') }}
+      <input type="number" name="max_connections" min="0" value="0">
+    </label>
+    <label>{{ t('users.speed_limit') }} (kbit/s)
+      <input type="number" name="speed_limit_kbps" min="0" value="0">
+    </label>
+    <label>{{ t('nodes.title') }}
+      <select name="node_id">
+        <option value="0">—</option>
+        {% for n in nodes %}<option value="{{ n.id }}">{{ n.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="modal-actions">
+      <button type="submit" class="btn btn-primary">{{ t('common.save') }}</button>
+      <button type="button" class="btn" onclick="document.getElementById('modal').innerHTML=''">{{ t('common.cancel') }}</button>
+    </div>
+  </form>
+</div>

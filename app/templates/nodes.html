@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nodes.title') }} — {{ t('app.name') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('nodes.title') }}</h1>
+</div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>{{ t('nodes.name') }}</th>
+      <th>{{ t('nodes.host') }}</th>
+      <th>{{ t('nodes.status') }}</th>
+      <th>{{ t('nodes.clients') }}</th>
+      <th>{{ t('nodes.cpu') }}</th>
+      <th>{{ t('nodes.mem') }}</th>
+      <th>{{ t('nodes.net') }}</th>
+      <th>{{ t('nodes.queue') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    {% set m = row.metric %}
+    <tr>
+      <td><a href="{{ base_path }}/nodes/{{ row.node.id }}">{{ row.node.name }}</a></td>
+      <td>{{ row.node.host }}:{{ row.node.port }}</td>
+      <td>
+        <span class="badge badge-{{ 'ok' if row.node.status.value == 'online' else 'off' }}">{{ row.node.status.value }}</span>
+      </td>
+      <td>{{ m.client_count if m else '—' }}</td>
+      <td>{% if m %}{{ '%.1f' | format(m.cpu_percent) }}%{% else %}—{% endif %}</td>
+      <td>{% if m %}{{ m.mem_used | size }} / {{ m.mem_total | size }}{% else %}—{% endif %}</td>
+      <td>{% if m %}{{ m.net_rx | size }} / {{ m.net_tx | size }}{% else %}—{% endif %}</td>
+      <td>{% if row.pending %}<span class="badge badge-warn">{{ row.pending }}</span>{% else %}0{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted">—</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

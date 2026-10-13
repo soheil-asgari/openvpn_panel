@@ -1,0 +1,34 @@
+<table class="table">
+  <thead>
+    <tr>
+      <th>{{ t('tunnels.name') }}</th>
+      <th>{{ t('tunnels.backend') }}</th>
+      <th>{{ t('tunnels.transport') }}</th>
+      <th>{{ t('tunnels.entry') }}</th>
+      <th>{{ t('tunnels.ports') }}</th>
+      <th>{{ t('tunnels.status') }}</th>
+      <th>{{ t('tunnels.latency') }}</th>
+      <th>{{ t('tunnels.actions') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    {% set tn = row.tunnel %}
+    <tr id="tunnel-{{ tn.id }}">
+      <td><a href="{{ base_path }}/tunnels/{{ tn.id }}">{{ tn.name }}</a></td>
+      <td class="mono">{{ tn.backend.value }}</td>
+      <td class="mono">{{ tn.transport.value }}</td>
+      <td>{{ tn.entry_host }}:{{ tn.entry_ssh_port }}</td>
+      <td class="mono">{{ tn.port_list() | join(', ') or tn.control_port }}</td>
+      <td><span class="badge badge-{{ 'ok' if tn.status.value == 'active' else ('warn' if tn.status.value in ['degraded','provisioning'] else 'off') }}">{{ tn.status.value }}</span></td>
+      <td>{% if row.sample %}{{ '%.1f' | format(row.sample.latency_ms) }} ms{% else %}—{% endif %}</td>
+      <td class="actions">
+        <button class="btn btn-sm" hx-post="{{ base_path }}/partials/tunnels/{{ tn.id }}/restart" hx-target="#modal" hx-swap="innerHTML">{{ t('tunnels.restart') }}</button>
+        <button class="btn btn-sm btn-danger" hx-post="{{ base_path }}/partials/tunnels/{{ tn.id }}/delete" hx-target="#tunnels-body" hx-swap="innerHTML" hx-confirm="{{ t('tunnels.delete_confirm') }}">{{ t('users.delete') }}</button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted">{{ t('tunnels.none') }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
