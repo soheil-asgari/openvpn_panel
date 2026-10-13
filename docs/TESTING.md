@@ -56,7 +56,7 @@ Each step lists the exact command and the expected result.
 1. Provision a fresh Ubuntu 22.04 VPS, nothing preinstalled.
 2. Run:
    ```bash
-   bash <(curl -fsSL <release URL>/install.sh)
+   bash <(curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh)
    ```
    **Expected:** disclaimer shown; after typing `yes`, preflight checks pass;
    prerequisites install; checksum verified; summary printed and saved to
@@ -130,8 +130,8 @@ For the main protocol (OpenVPN) and then each additional protocol
 ### 2.7 Uninstall test
 
 ```bash
-bash <(curl -fsSL <release URL>/install.sh) uninstall        # keep data
-bash <(curl -fsSL <release URL>/install.sh) uninstall --purge  # delete data
+bash <(curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh) uninstall        # keep data
+bash <(curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh) uninstall --purge  # delete data
 ```
 **Expected:** services stopped and removed, units/firewall cleaned; `--purge`
 also removes config/data/PKI and the service user.

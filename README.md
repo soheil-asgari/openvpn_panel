@@ -7,9 +7,9 @@
 **Self-hosted VPN & tunnel management — OpenVPN, WireGuard, AnyConnect, L2TP/IPsec and sing-box, with multi-node, resellers and a REST API.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/<org>/<repo>?include_prereleases)](https://github.com/<org>/<repo>/releases)
-[![CI](https://github.com/<org>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/ci.yml)
-[![Stars](https://img.shields.io/github/stars/<org>/<repo>?style=social)](https://github.com/<org>/<repo>/stargazers)
+[![Release](https://img.shields.io/github/v/release/soheil-asgari/openvpn_panel?include_prereleases)](https://github.com/soheil-asgari/openvpn_panel/releases)
+[![CI](https://github.com/soheil-asgari/openvpn_panel/actions/workflows/ci.yml/badge.svg)](https://github.com/soheil-asgari/openvpn_panel/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/soheil-asgari/openvpn_panel?style=social)](https://github.com/soheil-asgari/openvpn_panel/stargazers)
 
 **English** | [فارسی](README.fa.md)
 
@@ -29,7 +29,7 @@
 On a **fresh** Ubuntu 22.04 / 24.04 server (also tested on Debian 12):
 
 ```bash
-bash <(curl -fsSL https://github.com/<org>/<repo>/releases/latest/download/install.sh)
+bash <(curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh)
 ```
 
 The installer downloads the **pinned, tagged release** (never a branch),

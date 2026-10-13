@@ -3,8 +3,9 @@
 # @SLUG@ one-line installer  (version @VERSION@)
 #
 # Usage (fresh, bare server):
-#   bash <(curl -fsSL <release URL>/install.sh)                 # interactive
-#   curl -fsSL <release URL>/install.sh | sudo bash -s -- --yes # non-interactive
+#   bash <(curl -fsSL https://github.com/@REPO@/releases/latest/download/install.sh)
+#   curl -fsSL https://github.com/@REPO@/releases/latest/download/install.sh \
+#     | sudo bash -s -- --yes                                   # non-interactive
 #
 # Subcommands:
 #   install | update | uninstall | repair | status | --version

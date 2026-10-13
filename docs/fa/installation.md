@@ -10,7 +10,7 @@
 روی سرور تازه، هیچ پیشنیازی لازم نیست:
 
 ```bash
-bash <(curl -fsSL https://github.com/<org>/<repo>/releases/latest/download/install.sh)
+bash <(curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh)
 ```
 
 نصبکننده ابتدا **سلب مسئولیت حقوقی** را نشان میدهد؛ با تایپ `yes` (یا پرچم
@@ -21,7 +21,7 @@ bash <(curl -fsSL https://github.com/<org>/<repo>/releases/latest/download/insta
 ## نصب غیرتعاملی
 
 ```bash
-curl -fsSL https://github.com/<org>/<repo>/releases/latest/download/install.sh \
+curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh \
   | sudo bash -s -- --yes \
       --user admin --password 'Aa1!aaaaAAAA' \
       --port 8080 --path /admin \

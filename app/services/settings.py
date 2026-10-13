@@ -52,7 +52,7 @@ DEFAULTS = {
     "panel.theme": "system",
     "panel.port": "8080",
     "update.enabled": "false",
-    "update.repo": "",
+    "update.repo": "soheil-asgari/openvpn_panel",
     "backup.schedule": "off",  # off | daily | weekly
     "backup.upload": "none",  # none | telegram | webhook
     "backup.telegram_token": "",

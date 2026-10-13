@@ -7,8 +7,8 @@
 **مدیریت خودمیزبان VPN و تونل — OpenVPN، WireGuard، AnyConnect، L2TP/IPsec و sing-box، همراه با چند-نودی، نمایندگان (Reseller) و REST API.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/<org>/<repo>?include_prereleases)](https://github.com/<org>/<repo>/releases)
-[![CI](https://github.com/<org>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/soheil-asgari/openvpn_panel?include_prereleases)](https://github.com/soheil-asgari/openvpn_panel/releases)
+[![CI](https://github.com/soheil-asgari/openvpn_panel/actions/workflows/ci.yml/badge.svg)](https://github.com/soheil-asgari/openvpn_panel/actions/workflows/ci.yml)
 
 [English](README.md) | **فارسی**
 
@@ -29,7 +29,7 @@
 روی یک سرور **تازهٔ** اوبونتو ۲۲.۰۴ یا ۲۴.۰۴ (آزمایششده روی Debian 12 نیز):
 
 ```bash
-bash <(curl -fsSL https://github.com/<org>/<repo>/releases/latest/download/install.sh)
+bash <(curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh)
 ```
 
 نصبکننده نسخهٔ **برگشتیِ تگشده** را دانلود میکند (هرگز از شاخهٔ `main`)،

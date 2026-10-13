@@ -27,8 +27,8 @@ verification kit, release engineering. **No new features. Nothing pushed.**
 
 Nothing to rotate yet (no secret found, nothing pushed). Before/after pushing,
 treat `OVPN_SECRET_KEY`, `OVPN_HOOK_TOKEN`, every API key and every tunnel
-token/SSH key as separate and rotate if there is any doubt. Also replace the git
-remote owner username (`soheil-asgari`) before publishing.
+token/SSH key as separate and rotate if there is any doubt. The git remote is set
+to the public repository `soheil-asgari/openvpn_panel`.
 
 ---
 
@@ -67,8 +67,11 @@ remote owner username (`soheil-asgari`) before publishing.
 
 - [x] Five unique name candidates with availability notes:
       [`docs/NAMING.md`](NAMING.md). **Owner must choose one.**
-- [x] Placeholder tokens used throughout (`<slug>`, `<org>`, `<repo>`, `@SLUG@`)
-      so a single rename pass applies everywhere.
+- [x] GitHub owner/repository fixed to the public repo
+      `soheil-asgari/openvpn_panel` in README badges, install one-liners, docs,
+      the release builder and the default update-check source. The distribution
+      slug (`<slug>` / `ovpn-panel`, `@SLUG@`) remains a working name pending the
+      final product-name choice.
 - [x] Original logo and banner created: [`docs/assets/logo.svg`](assets/logo.svg),
       [`docs/assets/banner.svg`](assets/banner.svg). Original color theme.
 - [x] Original README wording, structure and section names (EN + FA).
@@ -265,8 +268,9 @@ remote owner username (`soheil-asgari`) before publishing.
 3. **`pip-audit` / `bandit`** run in CI; the local environment could not run
    `pip-audit` (no PyPI advisory DB access here). The owner should confirm the CI
    security job is green.
-4. **Naming placeholders** (`<slug>`, `<org>`, `<repo>`) remain until the owner
-   chooses the final name; nothing anywhere assumes the old name is final.
+4. **Distribution-name placeholder** (`<slug>` / `ovpn-panel`) remains until the
+   owner chooses the final product name; the GitHub owner/repository is already
+   set to `soheil-asgari/openvpn_panel`.
 
 ## Recommendation
 

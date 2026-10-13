@@ -49,9 +49,9 @@ Only promote after the owner has completed the real-VPS tests in
 
 - The one-line installer referenced from the README **must** point at a tagged
   release, never at a mutable branch:
-  - `https://github.com/<org>/<repo>/releases/latest/download/install.sh`
+  - `https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh`
     (serves only published, non-draft, non-pre-release releases), or
-  - `https://github.com/<org>/<repo>/releases/download/vX.Y.Z/install.sh`.
+  - `https://github.com/soheil-asgari/openvpn_panel/releases/download/vX.Y.Z/install.sh`.
 - The `release-gate` workflow **fails** the build if any script or doc contains
   an install URL pointing at `.../main/` or `.../master/`.
 

@@ -6,7 +6,7 @@ family (dnf/yum) and Alpine (apk).
 ## Quick start (one line, fresh server)
 
 ```bash
-bash <(curl -fsSL https://github.com/<org>/<repo>/releases/latest/download/install.sh)
+bash <(curl -fsSL https://github.com/soheil-asgari/openvpn_panel/releases/latest/download/install.sh)
 ```
 
 This downloads the **pinned tagged release** (never a branch), verifies its

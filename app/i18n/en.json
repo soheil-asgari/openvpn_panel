@@ -205,7 +205,7 @@
   "settings.panel_title": "Panel title",
   "settings.panel_port": "Panel port",
   "settings.update_enabled": "Check for updates (opt-in)",
-  "settings.update_repo": "Update source (owner/repo)",
+  "settings.update_repo": "Update source (owner/repo, e.g. soheil-asgari/openvpn_panel)",
   "settings.update_hint": "Off by default. When enabled, the panel only reads the project's public releases; no telemetry is sent.",
   "settings.version": "Installed version",
   "settings.ssl": "TLS certificate",

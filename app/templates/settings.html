@@ -77,7 +77,7 @@
       <input type="checkbox" name="update_enabled" {{ 'checked' if panel.update_enabled == 'true' else '' }}> {{ t('settings.update_enabled') }}
     </label>
     <label>{{ t('settings.update_repo') }}
-      <input type="text" name="update_repo" value="{{ panel.update_repo }}" placeholder="owner/repo" maxlength="100">
+      <input type="text" name="update_repo" value="{{ panel.update_repo }}" placeholder="soheil-asgari/openvpn_panel" maxlength="100">
     </label>
     <p class="muted">{{ t('settings.update_hint') }}</p>
     <p class="muted">{{ t('settings.version') }}: {{ version }}</p>

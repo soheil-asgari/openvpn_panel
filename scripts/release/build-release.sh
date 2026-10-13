@@ -15,8 +15,8 @@ set -Eeuo pipefail
 
 SLUG="${SLUG:-ovpn-panel}"
 # Full GitHub "owner/repo" used to build the release download URL. In CI this is
-# GITHUB_REPOSITORY; locally it can be exported or left as the placeholder.
-REPO="${REPO:-${GITHUB_REPOSITORY:-<org>/<repo>}}"
+# GITHUB_REPOSITORY; locally it can be exported or left as the default below.
+REPO="${REPO:-${GITHUB_REPOSITORY:-soheil-asgari/openvpn_panel}}"
 
 usage() {
   printf 'usage: %s vX.Y.Z\n' "$0" >&2

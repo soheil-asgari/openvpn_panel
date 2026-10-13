@@ -44,8 +44,8 @@ scan yet. Re-run after the first commit.
 | Item | Action |
 | --- | --- |
 | Absolute path `d:/asgari/openvpn` in `docs/TUNNEL_RESEARCH.md` | Replaced with a neutral phrase |
-| Git remote `github.com/soheil-asgari/openvpn_panel` | **Not committed** (only in local `.git/config`) — the owner will set the final remote |
-| `origin` URL with an owner username | Flagged below for the owner to replace |
+| Git remote `github.com/soheil-asgari/openvpn_panel` | Public project repository — set as `origin` |
+| `origin` URL owner username | `soheil-asgari` (public project owner) |
 
 ## Rotate manually
 

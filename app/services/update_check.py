@@ -10,9 +10,9 @@ Design rules (release hardening):
 * **Failures are silent.** A network error returns ``check_failed`` and never
   breaks a request or logs a warning storm.
 
-The repository URL is read from settings (``update.repo``) so no private or
-placeholder URL is hardcoded. Until the owner picks the final project name and
-repository, this feature stays disabled and inert.
+The repository URL is read from settings (``update.repo``), which defaults to the
+project's public repository (``soheil-asgari/openvpn_panel``) and can be changed
+by the operator. The feature stays inert until explicitly enabled.
 """
 
 from __future__ import annotations

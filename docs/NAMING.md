@@ -39,8 +39,10 @@ trademark-friendly string.
    - CLI command and menu (`/usr/local/bin/<slug>`),
    - UI brand strings and i18n defaults,
    - installer, docs (EN + FA), report and README.
-3. Replace the placeholder tokens used in the docs/templates: `<name>`, `<slug>`,
-   `<org>`, `<repo>`.
+3. Replace the placeholder tokens used in the docs/templates: `<name>` and
+   `<slug>`. The GitHub owner/repository is already fixed to
+   `soheil-asgari/openvpn_panel` (badges, install one-liners, release builder and
+   install template), so no `<org>`/`<repo>` token remains.
 4. Re-run the originality/similarity check (name, author, domains, distinctive
    phrases, file names, installer wording) after the rename and record the
    result in `docs/RELEASE_REPORT.md`.

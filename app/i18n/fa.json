@@ -205,7 +205,7 @@
   "settings.panel_title": "عنوان پنل",
   "settings.panel_port": "پورت پنل",
   "settings.update_enabled": "بررسی بهروزرسانی (اختیاری)",
-  "settings.update_repo": "منبع بهروزرسانی (owner/repo)",
+  "settings.update_repo": "منبع بهروزرسانی (owner/repo، مثلاً soheil-asgari/openvpn_panel)",
   "settings.update_hint": "بهصورت پیشفرض خاموش است. با فعالسازی، پنل فقط نسخههای عمومی پروژه را میخواند؛ هیچ دادهای ارسال نمیشود.",
   "settings.version": "نسخه نصبشده",
   "settings.ssl": "گواهی TLS",
