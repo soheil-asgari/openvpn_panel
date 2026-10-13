@@ -81,6 +81,16 @@ sed -e "s|@VERSION@|${VERSION}|g" \
 chmod 0755 "${DIST}/install.sh"
 bash -n "${DIST}/install.sh"
 
+echo "==> ShellCheck the shell scripts"
+if command -v shellcheck >/dev/null 2>&1; then
+  # -x follows the sourced lib/ helpers (SC1090/SC1091).
+  mapfile -t _shellcheck_files < <(find "${ROOT}/scripts" -name '*.sh' -not -path '*/systemd/*')
+  shellcheck -x "${_shellcheck_files[@]}"
+  shellcheck -x "${DIST}/install.sh"
+else
+  echo "warn: shellcheck not found; skipping shell lint" >&2
+fi
+
 echo "==> Writing SHA256SUMS"
 (
   cd "${DIST}"

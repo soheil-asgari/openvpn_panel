@@ -82,5 +82,5 @@ jobs:
       - name: shellcheck the generated installer and verification scripts
         run: |
           sudo apt-get update -y && sudo apt-get install -y shellcheck
-          shellcheck dist/install.sh
-          shellcheck scripts/vps-smoke-test.sh scripts/post-reboot-check.sh scripts/tunnel-check.sh
+          shellcheck -x dist/install.sh
+          shellcheck -x scripts/vps-smoke-test.sh scripts/post-reboot-check.sh scripts/tunnel-check.sh

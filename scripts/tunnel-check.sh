@@ -75,7 +75,11 @@ fi
 
 echo
 echo "== forwarding ==="
-[[ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)" == "1" ]] && rc PASS "ip_forward=1" || rc FAIL "ip_forward != 1"
+if [[ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)" == "1" ]]; then
+  rc PASS "ip_forward=1"
+else
+  rc FAIL "ip_forward != 1"
+fi
 
 echo
 echo "RESULT: ${PASS} passed, ${FAIL} failed"

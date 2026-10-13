@@ -11,7 +11,6 @@
 set -uo pipefail
 
 SLUG="${SLUG:-ovpn-panel}"
-CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR:-/etc/${SLUG}}"
 INSTANCES_DIR="${OVPN_INSTANCES_DIR:-/etc/openvpn/instances}"
 PASS=0
 FAIL=0
@@ -22,20 +21,30 @@ printf '%s post-reboot check — uptime %s\n' "${SLUG}" "$(uptime -p 2>/dev/null
 
 printf '\n== services ==\n'
 for u in "${SLUG}.service" "${SLUG}-helper.service"; do
-  systemctl is-active --quiet "$u" && rc PASS "$u active" || rc FAIL "$u not active"
+  if systemctl is-active --quiet "$u"; then
+    rc PASS "$u active"
+  else
+    rc FAIL "$u not active"
+  fi
 done
-systemctl is-enabled --quiet "${SLUG}.service" 2>/dev/null \
-  && rc PASS "${SLUG}.service enabled (survives reboot)" || rc FAIL "${SLUG}.service not enabled"
+if systemctl is-enabled --quiet "${SLUG}.service" 2>/dev/null; then
+  rc PASS "${SLUG}.service enabled (survives reboot)"
+else
+  rc FAIL "${SLUG}.service not enabled"
+fi
 
 printf '\n== OpenVPN instances ==\n'
 found=0
 for meta in "${INSTANCES_DIR}"/*.env; do
   [[ -f "${meta}" ]] || continue
   found=1
+  # shellcheck source=/dev/null
   name="$( . "${meta}"; printf '%s' "${OVPN_INSTANCE_NAME}" )"
-  systemctl is-active --quiet "openvpn-server@${name}" \
-    && rc PASS "openvpn-server@${name} active" \
-    || rc FAIL "openvpn-server@${name} not active"
+  if systemctl is-active --quiet "openvpn-server@${name}"; then
+    rc PASS "openvpn-server@${name} active"
+  else
+    rc FAIL "openvpn-server@${name} not active"
+  fi
 done
 [[ "${found}" -eq 1 ]] || printf '  SKIP  no OpenVPN instances found\n'
 
@@ -48,11 +57,17 @@ else
 fi
 
 printf '\n== NAT after reboot ==\n'
-[[ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)" == "1" ]] \
-  && rc PASS "ip_forward still 1" || rc FAIL "ip_forward reverted"
+if [[ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)" == "1" ]]; then
+  rc PASS "ip_forward still 1"
+else
+  rc FAIL "ip_forward reverted"
+fi
 if command -v nft >/dev/null 2>&1; then
-  nft list ruleset 2>/dev/null | grep -q 'masquerade' \
-    && rc PASS "NAT rules re-applied on boot" || rc FAIL "NAT rules missing after reboot"
+  if nft list ruleset 2>/dev/null | grep -q 'masquerade'; then
+    rc PASS "NAT rules re-applied on boot"
+  else
+    rc FAIL "NAT rules missing after reboot"
+  fi
 fi
 
 printf '\nRESULT: %d passed, %d failed\n' "${PASS}" "${FAIL}"

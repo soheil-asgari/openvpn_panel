@@ -8,9 +8,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/ovpn-core.sh
+# shellcheck source=scripts/lib/ovpn-core.sh
 . "${SCRIPT_DIR}/lib/ovpn-core.sh"
-# shellcheck source=lib/panel-core.sh
+# shellcheck source=scripts/lib/panel-core.sh
 . "${SCRIPT_DIR}/lib/panel-core.sh"
 
 SRC_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"

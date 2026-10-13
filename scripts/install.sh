@@ -14,9 +14,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/ovpn-core.sh
+# shellcheck source=scripts/lib/ovpn-core.sh
 . "${SCRIPT_DIR}/lib/ovpn-core.sh"
-# shellcheck source=lib/panel-core.sh
+# shellcheck source=scripts/lib/panel-core.sh
 . "${SCRIPT_DIR}/lib/panel-core.sh"
 
 SRC_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -31,7 +31,6 @@ PANEL_PORT=""
 PANEL_HOST=""
 DEFAULT_DNS="1.1.1.1"
 DEFAULT_MTU="1500"
-ADD_TCP_INSTANCE=""
 
 usage() {
   cat <<'EOF'
@@ -181,7 +180,9 @@ OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
 ovpn_log "Recording install configuration"
 ovpn_env_set OVPN_PANEL_PORT "${PANEL_PORT}"
 ovpn_env_set OVPN_ADMIN_USER "${ADMIN_USER}"
-[[ -n "${PANEL_HOST}" ]] && ovpn_env_set OVPN_PANEL_HOST "${PANEL_HOST}" || true
+if [[ -n "${PANEL_HOST}" ]]; then
+  ovpn_env_set OVPN_PANEL_HOST "${PANEL_HOST}"
+fi
 install -m 0640 /dev/null "${OVPN_SYSCONF}" 2>/dev/null || true
 {
   printf 'OVPN_PANEL_PORT=%s\n' "${PANEL_PORT}"

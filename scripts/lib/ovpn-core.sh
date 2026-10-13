@@ -128,7 +128,9 @@ ovpn_validate_proto() {
 }
 
 ovpn_validate_port() {
-  [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 1 && $1 <= 65535 )) || ovpn_die "invalid port: $1"
+  if [[ ! "$1" =~ ^[0-9]+$ ]] || (( $1 < 1 || $1 > 65535 )); then
+    ovpn_die "invalid port: $1"
+  fi
 }
 
 ovpn_validate_subnet() {
@@ -137,9 +139,9 @@ ovpn_validate_subnet() {
 
 _netmask_from_cidr() {
   # Convert /24 to 255.255.255.0 (best-effort for /8../32).
-  local cidr="$1" bits octets=() i val
+  local cidr="$1" bits octets=() val
   bits="${cidr#*/}"
-  for i in 1 2 3 4; do
+  for _ in 1 2 3 4; do
     if (( bits >= 8 )); then val=255; bits=$((bits-8));
     elif (( bits <= 0 )); then val=0;
     else val=$(( 256 - (1 << (8 - bits)) )); bits=0; fi
@@ -161,11 +163,11 @@ ovpn_instance_write() {
   install -d -m 0755 "${OVPN_CCD_DIR}"
   install -d -m 0755 "${OVPN_STATUS_DIR}"
 
-  local net base netmask ccd
+  local net netmask ccd
   net="${subnet%/*}"; netmask="$(_netmask_from_cidr "${subnet}")"
   ccd="${OVPN_CCD_DIR}/${name}"
 
-  local proto_line="" tls_line="" auth_lines="" dev="tun"
+  local proto_line="" auth_lines="" dev="tun"
   case "${proto}" in
     udp) proto_line="proto udp" ;;
     tcp) proto_line="proto tcp-server"; dev="tun" ;;
@@ -427,9 +429,8 @@ ovpn_persist_nftables() {
 
 ovpn_open_firewall_ports() {
   # OpenVPN's own ports plus the panel's configured admin port.
-  local wan proto ports=(1194) p
+  local ports=(1194) p
   for p in "$@"; do ports+=("$p"); done
-  wan="$(ovpn_wan_iface)"
 
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
     for p in "${ports[@]}"; do
@@ -460,7 +461,6 @@ ovpn_open_firewall_ports() {
 
 # --- Client config template --------------------------------------------------
 ovpn_write_ovpn_template() {
-  local host="${1:-VPN_HOST}" port="${2:-1194}" proto="${3:-udp}"
   install -d -m 0755 "${OVPN_CLIENT_DIR}"
   install -d -m 0750 "${OVPN_PANEL_CONFIG_DIR}"
   cat >"${OVPN_PANEL_CONFIG_DIR}/client.ovpn.template" <<EOF

@@ -8,7 +8,6 @@ set -euo pipefail
 
 OVPN_PANEL_VENV="${OVPN_PANEL_VENV:-${OVPN_PANEL_DIR}/.venv}"
 OVPN_PANEL_SERVICE="/etc/systemd/system/ovpn-panel.service"
-OVPN_PANEL_HELPER_SERVICE="/etc/systemd/system/ovpn-panel-helper.service"
 
 # --- panel.env key/value helpers --------------------------------------------
 ovpn_env_get() {

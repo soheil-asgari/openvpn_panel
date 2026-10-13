@@ -26,12 +26,12 @@ elif [[ -f "${SCRIPT_DIR}/scripts/lib/ovpn-core.sh" ]]; then
 else
   LIB_DIR="${SCRIPT_DIR}"
 fi
-# shellcheck source=lib/ovpn-core.sh
+# shellcheck source=scripts/lib/ovpn-core.sh
 . "${LIB_DIR}/ovpn-core.sh"
-# shellcheck source=lib/panel-core.sh
+# shellcheck source=scripts/lib/panel-core.sh
 . "${LIB_DIR}/panel-core.sh"
 
-pause() { [[ -t 0 ]] && read -r -p "Press Enter to continue..." _ || true; }
+pause() { if [[ -t 0 ]]; then read -r -p "Press Enter to continue..." _; fi; }
 
 require_root_or_die() {
   [[ "${EUID}" -eq 0 ]] || ovpn_die "this action requires root (try: sudo ovpn-panel)"

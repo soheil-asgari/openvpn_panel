@@ -69,11 +69,15 @@ fi
 
 section "panel HTTP"
 code="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 8 "http://127.0.0.1:${PORT}/" 2>/dev/null || echo 000)"
-[[ "${code}" == "200" || "${code}" == "302" ]] && res PASS "panel responds (${code})" || res FAIL "panel HTTP ${code}"
+if [[ "${code}" == "200" || "${code}" == "302" ]]; then
+  res PASS "panel responds (${code})"
+else
+  res FAIL "panel HTTP ${code}"
+fi
 
 section "TLS (only if a reverse proxy / certbot is configured)"
 if compgen -G "/etc/letsencrypt/live/*/fullchain.pem" >/dev/null; then
-  domain="$(ls -d /etc/letsencrypt/live/*/ 2>/dev/null | head -1 | xargs -I{} basename {})"
+  domain="$(find /etc/letsencrypt/live -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | head -1)"
   hcode="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 8 "https://${domain}/" 2>/dev/null || echo 000)"
   if [[ "${hcode}" =~ ^(200|302)$ ]]; then
     res PASS "HTTPS ${domain} (${hcode})"
@@ -113,14 +117,22 @@ if [[ "${root_use:-100}" -lt 90 ]]; then res PASS "root disk usage ${root_use}%"
 for f in "/var/log/${SLUG}-install.log" "/var/log/${SLUG}-smoke-report.txt"; do
   if [[ -f "${f}" ]]; then
     sz="$(du -m "${f}" | awk '{print $1}')"
-    [[ "${sz}" -lt 50 ]] && res PASS "$(basename "${f}") ${sz} MB" || res FAIL "$(basename "${f}") ${sz} MB (large)"
+    if [[ "${sz}" -lt 50 ]]; then
+      res PASS "$(basename "${f}") ${sz} MB"
+    else
+      res FAIL "$(basename "${f}") ${sz} MB (large)"
+    fi
   fi
 done
 
 section "journal errors (last 15 min)"
 if command -v journalctl >/dev/null 2>&1; then
   errs="$(journalctl -u "${SLUG}.service" --since '15 min ago' -p err --no-pager 2>/dev/null | grep -c . || true)"
-  [[ "${errs:-0}" -eq 0 ]] && res PASS "no error-level journal entries" || res FAIL "${errs} error journal entries"
+  if [[ "${errs:-0}" -eq 0 ]]; then
+    res PASS "no error-level journal entries"
+  else
+    res FAIL "${errs} error journal entries"
+  fi
 fi
 
 log ""

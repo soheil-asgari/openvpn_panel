@@ -11,7 +11,6 @@
 #
 set -euo pipefail
 
-CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR:-/etc/ovpn-panel}"
 AUTH_SOCKET="${OVPN_PANEL_AUTH_SOCKET:-/run/ovpn-panel/auth.sock}"
 PYTHON_BIN="${OVPN_PANEL_PYTHON:-/opt/ovpn-panel/.venv/bin/python}"
 
