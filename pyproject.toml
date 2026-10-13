@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ovpn-panel"
-version = "1.0.0rc1"
+version = "1.0.0"
 description = "Self-hosted OpenVPN web panel with multi-node, resellers and a REST API"
 readme = "README.md"
 requires-python = ">=3.11"
