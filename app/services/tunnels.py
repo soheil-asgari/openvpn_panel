@@ -243,7 +243,7 @@ def delete_tunnel(db: Session, tunnel: Tunnel) -> None:
 # Panel-owned SSH key
 # --------------------------------------------------------------------------- #
 def panel_key_path(tunnel_name: str) -> Path:
-    return get_settings().data_dir / "tunnels" / f"{tunnel_name}.ed25519"
+    return get_settings().tunnels_dir / f"{tunnel_name}.ed25519"
 
 
 def ensure_panel_key(tunnel: Tunnel, key_text: str | None = None) -> str:

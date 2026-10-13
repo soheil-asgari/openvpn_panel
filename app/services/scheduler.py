@@ -107,7 +107,7 @@ def scheduled_backup() -> None:
 
         notifications.notify_backup(db, result.filename, ok)
         # Persist the archive for local retention.
-        target = get_settings().data_dir / "backups"
+        target = get_settings().backups_dir
         target.mkdir(parents=True, exist_ok=True)
         (target / result.filename).write_bytes(result.payload)
 

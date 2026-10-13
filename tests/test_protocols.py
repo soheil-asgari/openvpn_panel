@@ -343,7 +343,9 @@ def test_openvpn_set_limits_writes_state() -> None:
     executor = FakeExecutor()
     backend = OpenVpnBackend(executor, FakeInstance(kind="openvpn", name="server"))
     backend.set_limits(UserSpec(username="alice", data_limit_bytes=1024))
-    path = "/var/lib/ovpn-panel/protocol-state/server/alice.json"
+    from app.config import get_settings
+
+    path = (get_settings().protocol_state_dir / "server" / "alice.json").as_posix()
     payload = json.loads(executor.files[path])
     assert payload["data_limit_bytes"] == 1024
     assert payload["status"] == "active"

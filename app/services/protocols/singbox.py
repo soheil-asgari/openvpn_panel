@@ -42,6 +42,14 @@ INBOUND_TYPES = ("vmess", "vless", "trojan", "shadowsocks", "hysteria2")
 SECURITY_MODES = ("none", "tls", "reality")
 
 
+def state_dir() -> str:
+    """sing-box per-user state directory, from the panel settings."""
+
+    from app.config import get_settings
+
+    return (get_settings().protocol_state_dir / "singbox").as_posix()
+
+
 # --------------------------------------------------------------------------- #
 # Credential helpers
 # --------------------------------------------------------------------------- #
@@ -417,7 +425,7 @@ class SingBoxBackend(ProtocolBackend):
         # Per-user limits are enforced by the panel scheduler using the V2Ray
         # API stats; store the desired values for that pass.
         self.executor.write_file(
-            f"/var/lib/ovpn-panel/protocol-state/singbox/{spec.username}.json",
+            f"{state_dir()}/{spec.username}.json",
             json.dumps(
                 {
                     "data_limit_bytes": int(spec.data_limit_bytes or 0),

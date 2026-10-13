@@ -37,6 +37,8 @@ jobs:
         run: pytest --maxfail=1 -q
         env:
           OVPN_PANEL_CONFIG_DIR: ${{ runner.temp }}/ovpn-panel
+          OVPN_DATA_DIR: ${{ runner.temp }}/ovpn-panel/data
+          OVPN_LOG_DIR: ${{ runner.temp }}/ovpn-panel/log
           OVPN_DATABASE_URL: sqlite:///${{ runner.temp }}/ovpn-panel/ci.sqlite3
 
   shellcheck:

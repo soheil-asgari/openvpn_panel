@@ -23,7 +23,13 @@ from app.services.protocols.base import (
 )
 from app.services.protocols.executor import Executor  # noqa: F401 - typing only
 
-STATE_DIR = "/var/lib/ovpn-panel/protocol-state"
+
+def state_dir() -> str:
+    """Base directory for per-user protocol state, from the panel settings."""
+
+    from app.config import get_settings
+
+    return get_settings().protocol_state_dir.as_posix()
 
 
 class OpenVpnBackend(ProtocolBackend):
@@ -65,7 +71,7 @@ class OpenVpnBackend(ProtocolBackend):
 
     # -- user lifecycle ---------------------------------------------------- #
     def _state_path(self, username: str) -> str:
-        return f"{STATE_DIR}/{self.instance_name or 'server'}/{username}.json"
+        return f"{state_dir()}/{self.instance_name or 'server'}/{username}.json"
 
     def create_user(self, spec: UserSpec) -> None:
         from app.services import helper_client

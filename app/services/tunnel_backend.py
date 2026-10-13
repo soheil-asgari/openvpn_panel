@@ -212,6 +212,11 @@ class BackhaulBackend(TunnelBackend):
         transport = transport if transport in self.transports else "tcp"
         ports_block = ",\n".join(f'  "{int(p)}"' for p in public_ports) or '  "443"'
         accept_udp = "true" if transport == "tcpmux" else "false"
+        # Log location comes from the panel settings (``OVPN_LOG_DIR``) so tests
+        # and non-root runs never write to a system path.
+        from app.config import get_settings
+
+        sniffer_log = get_settings().log_dir / "backhaul.json"
         # Entry side acts as the *client* dialling the exit server, so users'
         # traffic is forwarded to the exit host where OpenVPN listens.
         config = (
@@ -224,7 +229,7 @@ class BackhaulBackend(TunnelBackend):
             "retry_interval = 3\n"
             "dial_timeout = 10\n"
             f"accept_udp = {accept_udp}\n"
-            'sniffer_log = "/var/log/backhaul.json"\n'
+            f'sniffer_log = "{sniffer_log}"\n'
             'log_level = "info"\n'
             "ports = [\n"
             f"{ports_block}\n"

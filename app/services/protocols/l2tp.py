@@ -24,7 +24,14 @@ CHAP_SECRETS = "/etc/ppp/chap-secrets"
 IPSEC_SECRETS = "/etc/ipsec.secrets"
 L2TPD_CONF = "/etc/xl2tpd/xl2tpd.conf"
 IPSEC_CONF = "/etc/ipsec.conf"
-STATE_DIR = "/var/lib/ovpn-panel/protocol-state/l2tp"
+
+
+def state_dir() -> str:
+    """L2TP per-user state directory, from the panel settings."""
+
+    from app.config import get_settings
+
+    return (get_settings().protocol_state_dir / "l2tp").as_posix()
 
 
 class L2tpBackend(ProtocolBackend):
@@ -111,7 +118,7 @@ class L2tpBackend(ProtocolBackend):
             "expires_at": spec.expires_at.isoformat() if spec.expires_at else None,
         }
         self.executor.write_file(
-            f"{STATE_DIR}/{spec.username}.json", json.dumps(payload), mode=0o600
+            f"{state_dir()}/{spec.username}.json", json.dumps(payload), mode=0o600
         )
 
     def disable(self, username: str) -> None:
@@ -128,7 +135,9 @@ class L2tpBackend(ProtocolBackend):
     def usage(self) -> list[Usage]:
         # Traffic is recorded by the ppp up/down hooks into per-user counter
         # files; read them back here.
-        result = self.run(["sh", "-c", f"cat {STATE_DIR}/*.usage 2>/dev/null || true"], timeout=20)
+        result = self.run(
+            ["sh", "-c", f"cat {state_dir()}/*.usage 2>/dev/null || true"], timeout=20
+        )
         usages: list[Usage] = []
         for line in result.stdout.splitlines():
             parts = line.split()

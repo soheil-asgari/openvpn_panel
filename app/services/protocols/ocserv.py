@@ -25,6 +25,14 @@ OCPASSWD_FILE = "/etc/ocserv/ocpasswd"
 OCSERV_DIR = "/etc/ocserv"
 
 
+def state_dir() -> str:
+    """ocserv per-user state directory, from the panel settings."""
+
+    from app.config import get_settings
+
+    return (get_settings().protocol_state_dir / "ocserv").as_posix()
+
+
 class OcservBackend(ProtocolBackend):
     kind = "ocserv"
     display_name = "Cisco AnyConnect (ocserv)"
@@ -110,7 +118,7 @@ class OcservBackend(ProtocolBackend):
             "speed_limit_kbps": int(spec.speed_limit_kbps or 0),
         }
         self.executor.write_file(
-            f"/var/lib/ovpn-panel/protocol-state/ocserv/{spec.username}.json",
+            f"{state_dir()}/{spec.username}.json",
             json.dumps(payload),
             mode=0o600,
         )

@@ -42,8 +42,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/panel.sqlite3"
 
     # Paths ------------------------------------------------------------------
+    # All panel-owned filesystem state lives under ``data_dir`` (override with
+    # ``OVPN_DATA_DIR``); logs under ``log_dir`` (``OVPN_LOG_DIR``). Tests and
+    # non-root runs point these at a temporary directory.
     data_dir: Path = Path("/var/lib/ovpn-panel")
     config_dir: Path = CONFIG_DIR
+    log_dir: Path = Path("/var/log/ovpn-panel")
     helper_socket: Path = Path("/run/ovpn-panel/helper.sock")
 
     # Local unix socket used by OpenVPN's auth-user-pass-verify hook.
@@ -112,6 +116,24 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    @property
+    def protocol_state_dir(self) -> Path:
+        """Per-user protocol state written by the protocol backends."""
+
+        return self.data_dir / "protocol-state"
+
+    @property
+    def tunnels_dir(self) -> Path:
+        """Panel-owned SSH keys for tunnels."""
+
+        return self.data_dir / "tunnels"
+
+    @property
+    def backups_dir(self) -> Path:
+        """Locally retained backup archives."""
+
+        return self.data_dir / "backups"
 
     @property
     def admin_prefix(self) -> str:

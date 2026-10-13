@@ -18,6 +18,8 @@ import pytest
 def _tmp_env() -> Iterator[None]:
     tmpdir = tempfile.mkdtemp(prefix="ovpn-panel-tests-")
     os.environ["OVPN_PANEL_CONFIG_DIR"] = tmpdir
+    os.environ["OVPN_DATA_DIR"] = str(Path(tmpdir) / "data")
+    os.environ["OVPN_LOG_DIR"] = str(Path(tmpdir) / "log")
     os.environ["OVPN_DATABASE_URL"] = f"sqlite:///{Path(tmpdir) / 'test.sqlite3'}"
     os.environ["OVPN_SECRET_KEY"] = "test-secret-key-not-for-production"
     os.environ["OVPN_SESSION_SECURE"] = "false"
@@ -38,7 +40,34 @@ def _tmp_env() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def _schema(_tmp_env: None) -> Iterator[None]:
+def _isolated_paths(tmp_path: Path, monkeypatch) -> Iterator[None]:  # noqa: ANN001
+    """Point every panel-owned path at a per-test temp directory.
+
+    No test may write under ``/var/lib/ovpn-panel``, ``/etc/ovpn-panel`` or
+    ``/var/log`` (which are root-owned on CI and read-only for the runner), so
+    the data/config/log directories are redirected and the settings cache is
+    cleared so every ``get_settings()`` call sees them.
+    """
+
+    data_dir = tmp_path / "data"
+    log_dir = tmp_path / "log"
+    config_dir = tmp_path / "config"
+    for path in (data_dir, log_dir, config_dir):
+        path.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("OVPN_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("OVPN_LOG_DIR", str(log_dir))
+    monkeypatch.setenv("OVPN_PANEL_CONFIG_DIR", str(config_dir))
+
+    from app.config import reset_settings_cache
+
+    reset_settings_cache()
+    yield
+    reset_settings_cache()
+
+
+@pytest.fixture(autouse=True)
+def _schema(_isolated_paths: None) -> Iterator[None]:
     """Recreate all tables before each test."""
 
     from app.db import get_engine
