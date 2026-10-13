@@ -483,7 +483,9 @@ do_uninstall() {
     [[ -f "${_meta}" ]] || continue
     # shellcheck disable=SC1090
     _inst="$( . "${_meta}"; printf '%s' "${OVPN_INSTANCE_NAME:-}" )"
-    [[ -n "${_inst}" ]] && systemctl disable --now "openvpn-server@${_inst}" 2>/dev/null || true
+    if [[ -n "${_inst}" ]]; then
+      systemctl disable --now "openvpn-server@${_inst}" >/dev/null 2>&1 || true
+    fi
   done
   rm -f "/etc/systemd/system/${SLUG}.service" \
         "/etc/systemd/system/${SLUG}-helper.service" \
