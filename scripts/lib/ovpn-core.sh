@@ -326,6 +326,9 @@ ovpn_instance_enable() {
       [[ -n "${path}" ]] || continue
       # Strip quotes if present.
       path="${path%\"}"; path="${path#\"}"
+      # The literal value "none" is valid OpenVPN syntax for directives such as
+      # "dh" (ECC / TLS crypt setups) — skip filesystem checks.
+      [[ "${path}" == "none" ]] && continue
       if [[ ! -f "${path}" ]]; then
         ovpn_die "config ${name} references missing file '${path}' (directive: ${directive})"
       fi
