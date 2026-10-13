@@ -56,6 +56,7 @@ jobs:
             dist/ovpn-panel-*.tar.gz
             dist/SHA256SUMS
           generate_release_notes: true
+          fail_on_unmatched_files: true
           # Release candidates are marked pre-release so that
           # releases/latest/download/... never serves them.
-          prerelease: ${{ contains(github.ref_name, 'rc') }}
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
