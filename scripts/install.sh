@@ -186,6 +186,7 @@ ovpn_install_packages "${BASE_PKGS[@]}"
 # --- OpenVPN core ------------------------------------------------------------
 if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
   install -d -m 0755 /etc/openvpn /etc/openvpn/server
+  install -d -m 0755 /etc/systemd/system/openvpn-server@.service.d
   # Track the PKI dir for first-install rollback — but only when no valid CA
   # exists yet, so a pre-existing CA is NEVER wiped.
   if [[ ! -f "${OVPN_PKI_DIR}/ca.crt" ]]; then

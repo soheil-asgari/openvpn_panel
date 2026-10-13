@@ -497,6 +497,8 @@ do_uninstall() {
   rm -rf "${INSTALL_DIR}" "/run/${SLUG}"
   if [[ "${purge}" -eq 1 ]]; then
     warn "purging data and configuration"
+    rm -f /etc/systemd/system/openvpn-server@.service.d/ovpn-panel.conf 2>/dev/null || true
+    rmdir /etc/systemd/system/openvpn-server@.service.d 2>/dev/null || true
     rm -rf "${CONFIG_DIR}" "/var/lib/${SLUG}" "/var/backups/${SLUG}"
     rm -rf /etc/openvpn/pki /etc/openvpn/instances /etc/openvpn/ccd /etc/openvpn/clients
     rm -f /etc/sysctl.d/99-${SLUG}.conf 2>/dev/null || true

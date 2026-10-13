@@ -66,6 +66,7 @@ fi
 
 if [[ "${PURGE_OPENVPN}" -eq 1 ]]; then
   ovpn_log "Purging OpenVPN core (PKI, instances, NAT, sysctl)"
+  ovpn_remove_openvpn_server_dropin
   rm -rf "${OVPN_PKI_DIR}" "${OVPN_INSTANCES_DIR}" "${OVPN_CCD_DIR}" \
          "${OVPN_AUTH_DIR}" "${OVPN_CLIENT_DIR}"
   rm -f "${SYSCTL_FILE}" "${NFT_FRAGMENT}"

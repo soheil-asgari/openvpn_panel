@@ -64,6 +64,9 @@ test the unmodified released installer against freshly built artifacts.
 3. **Instances** — for each `name:proto:port:subnet` spec it writes
    `/etc/openvpn/instances/<name>.conf` (+ a small `<name>.env` metadata file)
    with its own port, protocol (UDP/TCP), subnet, pushed DNS and MTU, and starts
+   via a systemd drop-in (`/etc/systemd/system/openvpn-server@.service.d/ovpn-panel.conf`)
+   that overrides `WorkingDirectory` to `/etc/openvpn/instances` (Ubuntu's stock
+   `openvpn-server@.service` expects config in `/etc/openvpn/server` otherwise).
    `openvpn-server@<name>.service`. Multiple UDP/TCP instances can coexist.
 4. **Networking** — enables IP forwarding (persisted in
    `/etc/sysctl.d/99-ovpn-panel.conf`) and installs a `ovpn-panel-nat.service`

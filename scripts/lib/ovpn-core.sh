@@ -179,6 +179,30 @@ ovpn_wan_iface() {
 # Each instance has <name>.conf (OpenVPN) and <name>.env (metadata) in
 # $OVPN_INSTANCES_DIR. The systemd template unit openvpn-server@<name> is used.
 
+# The standard Ubuntu/Debian openvpn-server@.service template uses
+# WorkingDirectory=/etc/openvpn/server and --config %i.conf, so it expects
+# configs at /etc/openvpn/server/%i.conf. We install a systemd drop-in that
+# overrides WorkingDirectory to OVPN_INSTANCES_DIR so the unit finds configs
+# at /etc/openvpn/instances/%i.conf instead.
+ovpn_install_openvpn_server_dropin() {
+  local dropin_dir="/etc/systemd/system/openvpn-server@.service.d"
+  local dropin_file="${dropin_dir}/ovpn-panel.conf"
+  if [[ -f "${dropin_file}" ]]; then
+    return 0  # already installed
+  fi
+  install -d -m 0755 "${dropin_dir}"
+  cat >"${dropin_file}" <<EOF
+# Managed by ovpn-panel — override WorkingDirectory so the template unit
+# openvpn-server@%i finds %i.conf under OVPN_INSTANCES_DIR.
+[Service]
+WorkingDirectory=${OVPN_INSTANCES_DIR}
+ExecStart=
+ExecStart=/usr/sbin/openvpn --status %t/openvpn-server/status/%i 10 --cd ${OVPN_INSTANCES_DIR} --config %i.conf
+EOF
+  chmod 0644 "${dropin_file}"
+  systemctl daemon-reload 2>/dev/null || true
+}
+
 ovpn_instance_meta_path() { printf '%s/%s.env' "${OVPN_INSTANCES_DIR}" "$1"; }
 ovpn_instance_conf_path() { printf '%s/%s.conf' "${OVPN_INSTANCES_DIR}" "$1"; }
 
@@ -312,6 +336,10 @@ EOF
 
 ovpn_instance_enable() {
   local name="$1"
+  # Ensure the systemd drop-in override exists so openvpn-server@.service
+  # looks for %i.conf in OVPN_INSTANCES_DIR instead of /etc/openvpn/server.
+  ovpn_install_openvpn_server_dropin
+
   # Validate that every file referenced by the generated config exists and is
   # readable BEFORE attempting to start the service.
   local conf; conf="$(ovpn_instance_conf_path "${name}")"
@@ -671,6 +699,16 @@ ovpn_rollback_execute() {
   _OVPN_ROLLBACK_UNITS=()
   _OVPN_ROLLBACK_FILES=()
   ovpn_log "Rollback complete"
+}
+
+ovpn_remove_openvpn_server_dropin() {
+  local dropin_dir="/etc/systemd/system/openvpn-server@.service.d"
+  local dropin_file="${dropin_dir}/ovpn-panel.conf"
+  if [[ -f "${dropin_file}" ]]; then
+    rm -f "${dropin_file}"
+    rmdir "${dropin_dir}" 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+  fi
 }
 
 # --- environment auto-heal ----------------------------------------------------

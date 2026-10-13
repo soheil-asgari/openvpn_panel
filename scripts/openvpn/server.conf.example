@@ -2,7 +2,9 @@
 #
 # The installer renders one file per instance at
 #   /etc/openvpn/instances/<name>.conf
-# and starts it through the template unit openvpn-server@<name>.service.
+# and starts it through the template unit openvpn-server@<name>.service
+# using a systemd drop-in that overrides WorkingDirectory so the unit
+# finds the config under /etc/openvpn/instances/ instead of /etc/openvpn/server/.
 #
 # Adjust the values below as needed; the installer overwrites this file when an
 # instance is (re)created through the CLI.
