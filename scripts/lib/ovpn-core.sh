@@ -250,6 +250,7 @@ ovpn_instance_write() {
 
   install -d -m 0755 "${OVPN_INSTANCES_DIR}"
   install -d -m 0755 "${OVPN_CCD_DIR}"
+  install -d -m 0755 "${OVPN_CCD_DIR}/${name}"
   install -d -m 0755 "${OVPN_STATUS_DIR}"
 
   local net netmask ccd
@@ -366,6 +367,23 @@ ovpn_instance_enable() {
     done <<<"${refs}"
   fi
   ovpn_ok "config ${name} — all referenced files exist and are readable"
+
+  # Runtime hooks (auth-user-pass-verify etc.) live under OVPN_PANEL_DIR and are
+  # staged by the panel phase BEFORE any service is started. Refuse to start the
+  # service when a referenced hook is missing — starting OpenVPN would abort
+  # immediately on the missing script.
+  if command -v ovpn_panel_verify_hooks >/dev/null 2>&1; then
+    ovpn_panel_verify_hooks
+  elif [[ -n "$(grep -oE '^(auth-user-pass-verify|client-connect|client-disconnect)[[:space:]]+' "${conf}" 2>/dev/null || true)" ]]; then
+    grep -oE '^\s*(auth-user-pass-verify|client-connect|client-disconnect)[[:space:]]+\S+' \
+      "${conf}" 2>/dev/null | while read -r _ path; do
+        [[ -f "${path}" && -x "${path}" ]] || {
+          printf 'error: hook %s referenced by %s is missing or not executable\n' "${path}" "${name}" >&2
+          exit 1
+        }
+      done
+    ovpn_ok "config ${name} — instance hooks present and executable"
+  fi
 
   systemctl enable "openvpn-server@${name}" >/dev/null 2>&1 || true
   systemctl restart "openvpn-server@${name}" || {

@@ -107,14 +107,19 @@ preflight() {
   ok "architecture: $(uname -m)"
 
   if [[ -r /etc/os-release ]]; then
+    # Scope the os-release variables: sourcing it would clobber this script's
+    # own VERSION constant (Ubuntu's os-release sets VERSION="24.04.x ...").
+    local _id _version_id _pretty
     # shellcheck disable=SC1091
-    . /etc/os-release
-    case "${ID:-}" in
-      ubuntu) [[ "${VERSION_ID:-}" =~ ^(22\.04|24\.04)$ ]] || warn "untested Ubuntu ${VERSION_ID:-}; continuing" ;;
-      debian) [[ "${VERSION_ID:-}" == 12 ]] || warn "untested Debian ${VERSION_ID:-}; continuing" ;;
-      *) warn "untested OS '${ID:-unknown}'; continuing" ;;
+    _id="$(. /etc/os-release; printf '%s' "${ID:-unknown}")"
+    _version_id="$(. /etc/os-release; printf '%s' "${VERSION_ID:-}")"
+    _pretty="$(. /etc/os-release; printf '%s' "${PRETTY_NAME:-unknown}")"
+    case "${_id}" in
+      ubuntu) [[ "${_version_id}" =~ ^(22\.04|24\.04)$ ]] || warn "untested Ubuntu ${_version_id}; continuing" ;;
+      debian) [[ "${_version_id}" == 12 ]] || warn "untested Debian ${_version_id}; continuing" ;;
+      *) warn "untested OS '${_id}'; continuing" ;;
     esac
-    ok "OS: ${PRETTY_NAME:-unknown}"
+    ok "OS: ${_pretty}"
   else
     warn "/etc/os-release missing; cannot verify OS"
   fi
@@ -396,7 +401,18 @@ self_test() {
   local failures=0
   if systemctl is-active --quiet "${SLUG}.service"; then ok "panel service active"; else warn "panel service not active"; failures=$((failures+1)); fi
   if systemctl is-active --quiet "${SLUG}-helper.service"; then ok "helper service active"; else warn "helper service not active"; failures=$((failures+1)); fi
-  if curl -fsS --max-time 5 "http://127.0.0.1:${PANEL_PORT}/" >/dev/null 2>&1; then ok "panel responds on port ${PANEL_PORT}"; else warn "panel did not respond on 127.0.0.1:${PANEL_PORT}"; failures=$((failures+1)); fi
+  # Any real HTTP response (login page 401 included, but never curl's "000"
+  # sentinel for a failed connection) proves the panel is serving. Retry
+  # briefly: on a fresh install uvicorn may take a few seconds to bind its
+  # listener after systemd reports the unit active.
+  local _code="" _tries=0
+  while [[ ${_tries} -lt 6 ]]; do
+    _code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PANEL_PORT}/" 2>/dev/null || true)"
+    if [[ "${_code}" =~ ^[1-9][0-9]{2}$ ]]; then break; fi
+    _tries=$((_tries+1))
+    sleep 2
+  done
+  if [[ "${_code}" =~ ^[1-9][0-9]{2}$ ]]; then ok "panel responds on port ${PANEL_PORT} (HTTP ${_code})"; else warn "panel did not respond on 127.0.0.1:${PANEL_PORT}"; failures=$((failures+1)); fi
   if [[ ${failures} -eq 0 ]]; then ok "self-test passed"; else warn "self-test reported ${failures} issue(s); check ${LOG_FILE}"; fi
 }
 

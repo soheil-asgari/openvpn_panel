@@ -32,7 +32,10 @@ ovpn_env_set() {
   else
     printf '%s=%s\n' "${key}" "${value}" >>"${file}"
   fi
-  chmod 0600 "${file}"
+  # Keep group-read (0640 when group is ovpn-panel): the panel service runs as
+  # the unprivileged user ovpn-panel and must be able to read panel.env. Never
+  # drop to 0600 here.
+  chmod 0640 "${file}"
 }
 
 ovpn_panel_get_port() {
@@ -75,7 +78,7 @@ ovpn_panel_restart_services() {
 
 # --- rendering the port into the systemd unit --------------------------------
 ovpn_panel_render_unit_port() {
-  local port="$1"
+  local port="${1:-8080}"
   [[ -f "${OVPN_PANEL_SERVICE}" ]] || return 0
   sed -i -E "s|(--port )[0-9]+|\1${port}|" "${OVPN_PANEL_SERVICE}"
 }
@@ -129,8 +132,14 @@ ovpn_panel_write_credentials() {
 }
 
 # --- panel app install -------------------------------------------------------
-ovpn_panel_install_app() {
+# Stage phase (panel-core.sh is only sourced when the panel will be installed):
+# extract the application files and apply permissions BEFORE any systemd service
+# is started. OpenVPN instances reference these hooks (auth-user-pass-verify etc),
+# so they must exist before openvpn-server@<name> is (re)started. The runtime
+# support dirs are created here too. Idempotent on re-run.
+ovpn_panel_stage_files() {
   local src_dir="$1"
+  ovpn_log "Staging panel files to ${OVPN_PANEL_DIR}"
   ovpn_log "Creating system user and directories"
   getent group ovpn-panel >/dev/null || groupadd --system ovpn-panel
   id -u ovpn-panel >/dev/null 2>&1 || \
@@ -156,7 +165,41 @@ ovpn_panel_install_app() {
   fi
   chmod 0755 "${OVPN_PANEL_DIR}/scripts/hooks/"*.sh
   chmod 0755 "${OVPN_PANEL_DIR}/scripts/ovpn-nat.sh" 2>/dev/null || true
+  ovpn_ok "panel files staged and hooks made executable"
+}
 
+# Verify (best-effort) that every hook referenced by every generated instance
+# config exists and is executable BEFORE the corresponding service starts.
+ovpn_panel_verify_hooks() {
+  local conf hooks=() h
+  for conf in "${OVPN_INSTANCES_DIR}"/*.conf; do
+    [[ -f "${conf}" ]] || continue
+    # The hook script is the SECOND token on each directive line
+    # (auth-user-pass-verify <script> via-file).
+    while read -r _ path; do
+      [[ -n "${path}" ]] || continue
+      [[ "${path}" == "${OVPN_PANEL_DIR}/scripts/hooks/"*.sh ]] || continue
+      hooks+=("${path}")
+    done < <(grep -oE '^(auth-user-pass-verify|client-connect|client-disconnect)[[:space:]]+\S+' "${conf}" 2>/dev/null || true)
+  done
+  if [[ ${#hooks[@]} -eq 0 ]]; then
+    return 0
+  fi
+  for h in "${hooks[@]}"; do
+    if [[ ! -f "${h}" ]]; then
+      ovpn_die "hook ${h} referenced by an instance config is missing — stage the panel files before starting services"
+    fi
+    if [[ ! -x "${h}" ]]; then
+      ovpn_die "hook ${h} is not executable — chmod +x the hooks before starting services"
+    fi
+  done
+  ovpn_ok "all instance hooks present and executable"
+}
+
+# Main panel app install: create the venv and install the package into it.
+# Assumes ovpn_panel_stage_files has already run (files present in OVPN_PANEL_DIR).
+ovpn_panel_install_app() {
+  local src_dir="$1"
   ovpn_log "Creating virtual environment"
   local py="${PYTHON_BIN:-python3}"
   "${py}" -m venv "${OVPN_PANEL_VENV}"

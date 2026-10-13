@@ -183,7 +183,9 @@ if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
 fi
 ovpn_install_packages "${BASE_PKGS[@]}"
 
-# --- OpenVPN core ------------------------------------------------------------
+# --- OpenVPN core: prepare (PKI + instance configs) --------------------------
+# Services are NOT started here — they start only after the panel files are
+# staged (hooks like auth-user-pass-verify must exist before OpenVPN starts).
 if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
   install -d -m 0755 /etc/openvpn /etc/openvpn/server
   install -d -m 0755 /etc/systemd/system/openvpn-server@.service.d
@@ -219,8 +221,26 @@ if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
   ovpn_enable_ip_forward
   ovpn_install_nat_helper
   ovpn_rollback_mark_service ovpn-panel-nat.service
+fi
 
-  # Second pass: start services now that NAT helper + PKI exist.
+# --- Stage panel files BEFORE any service is started -------------------------
+# The generated OpenVPN configs reference
+# $OVPN_PANEL_DIR/scripts/hooks/auth-user-pass-verify.sh (plus client-connect /
+# client-disconnect). Those files must exist and be executable before
+# openvpn-server@<name> is enabled below, otherwise OpenVPN aborts at startup.
+ovpn_panel_stage_files "${SRC_DIR}"
+if [[ -d "${OVPN_PANEL_DIR}/.venv" ]]; then
+  ovpn_ok "panel app already installed at ${OVPN_PANEL_DIR} — reusing"
+else
+  ovpn_rollback_mark_dir "${OVPN_PANEL_DIR}"
+fi
+
+# --- OpenVPN core: start services (after hooks are staged) -------------------
+if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
+  # Fatal if any hook referenced by a generated config is missing/not executable.
+  ovpn_panel_verify_hooks
+
+  # Second pass: start services now that hooks + NAT helper + PKI exist.
   for spec in "${_instances[@]}"; do
     [[ -n "${spec}" ]] || continue
     IFS=':' read -r iname _ _ _ <<<"${spec}"
@@ -243,14 +263,13 @@ if [[ "${INSTALL_OPENVPN}" -eq 1 ]]; then
   ovpn_write_ovpn_template "${PANEL_HOST:-VPN_HOST}" "${_ports[0]:-1194}" "udp"
 fi
 
-# --- Panel -------------------------------------------------------------------
-if [[ ! -d "${OVPN_PANEL_DIR}/.venv" ]]; then
+# --- Panel: virtualenv + installed package -----------------------------------
+if [[ ! -d "${OVPN_PANEL_DIR}/.venv/bin/python" ]]; then
   ovpn_panel_install_app "${SRC_DIR}"
   ovpn_rollback_mark_dir "${OVPN_PANEL_DIR}"
 else
-  ovpn_ok "panel app already installed at ${OVPN_PANEL_DIR} — reusing"
-  # Keep the app files in sync on a re-run.
-  ovpn_panel_install_app "${SRC_DIR}"
+  ovpn_log "Refreshing panel dependencies"
+  "${OVPN_PANEL_VENV}/bin/pip" install --upgrade "${OVPN_PANEL_DIR}"
 fi
 ovpn_panel_generate_secrets
 ovpn_rollback_mark_file "${OVPN_PANEL_CONFIG_DIR}/panel.env"
@@ -286,20 +305,28 @@ ovpn_rollback_mark_file /etc/systemd/system/ovpn-panel-agent@.service
 ovpn_panel_install_cli
 
 ovpn_log "Creating admin account"
-# create-admin fails if the user already exists (re-run) — reset the password
-# instead so the re-run succeeds while keeping user data.
+# create-admin fails (exit 1) if the user already exists (re-run) — reset the
+# password instead so the re-run succeeds while keeping user data. The failure
+# is captured explicitly (in a subshell, so neither `set -e` nor the ERR trap
+# aborts the install before we handle it).
+set +e
 ADMIN_OUT="$(
+  trap - ERR
+  set +e
   OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
     "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli create-admin "${ADMIN_USER}" \
     --password "${ADMIN_PASSWORD}" 2>&1
 )"
-if [[ "${ADMIN_OUT}" == *"already exists"* ]]; then
+ADMIN_RC=$?
+set -e
+if [[ "${ADMIN_RC}" -ne 0 && "${ADMIN_OUT}" == *"already exists"* ]]; then
   ovpn_ok "admin '${ADMIN_USER}' already exists — resetting password"
   OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
     "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli reset-password "${ADMIN_USER}" \
     --password "${ADMIN_PASSWORD}"
 else
   printf '%s\n' "${ADMIN_OUT}"
+  [[ "${ADMIN_RC}" -eq 0 ]] || ovpn_die "create-admin failed (exit ${ADMIN_RC})"
 fi
 
 # Persist credentials (mode 600) and show every access detail once at the end.
