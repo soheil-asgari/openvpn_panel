@@ -27,6 +27,8 @@ INSTALL_OPENVPN=1
 INSTANCES_SPEC=""
 ADMIN_USER=""
 ADMIN_PASSWORD=""
+ADMIN_PASSWORD_FLAG=0
+ADMIN_PASSWORD_GENERATED=0
 PANEL_PORT=""
 PANEL_HOST=""
 DEFAULT_DNS="1.1.1.1"
@@ -58,7 +60,7 @@ while [[ $# -gt 0 ]]; do
     --no-openvpn) INSTALL_OPENVPN=0; shift ;;
     --instances) INSTANCES_SPEC="${2:-}"; shift 2 ;;
     --admin-user) ADMIN_USER="${2:-}"; shift 2 ;;
-    --admin-password) ADMIN_PASSWORD="${2:-}"; shift 2 ;;
+    --admin-password) ADMIN_PASSWORD="${2:-}"; ADMIN_PASSWORD_FLAG=1; shift 2 ;;
     --panel-port) PANEL_PORT="${2:-}"; shift 2 ;;
     --host) PANEL_HOST="${2:-}"; shift 2 ;;
     --dns) DEFAULT_DNS="${2:-}"; shift 2 ;;
@@ -68,9 +70,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-ovpn_require_root
-ovpn_detect_os
-ovpn_log "Detected ${OVPN_OS_ID} ${OVPN_OS_VER} (package manager: ${OVPN_PKG:-none})"
+if [[ "${OVPN_INSTALL_DRY_RUN:-0}" -eq 1 ]]; then
+  # Test seam: resolve configuration only, then stop (no root, no changes).
+  OVPN_OS_ID="dry-run"; OVPN_OS_VER=""; OVPN_PKG=""
+else
+  ovpn_require_root
+  ovpn_detect_os
+  ovpn_log "Detected ${OVPN_OS_ID} ${OVPN_OS_VER} (package manager: ${OVPN_PKG:-none})"
+fi
 
 # --- interactive prompts -----------------------------------------------------
 prompt() {
@@ -100,7 +107,13 @@ collect_config() {
   [[ -n "${ADMIN_USER}" ]] || prompt ADMIN_USER "Panel admin username" "admin"
   if [[ -z "${ADMIN_PASSWORD}" ]]; then
     if [[ "${ASSUME_YES}" -eq 0 && -t 0 ]]; then
-      prompt_secret ADMIN_PASSWORD "Panel admin password (empty = random)"
+      prompt_secret ADMIN_PASSWORD "Admin password (empty = strong random)"
+    fi
+    # Empty input (interactive Enter, --password "", or omitted) => generate a
+    # strong random password instead of rejecting the install.
+    if [[ -z "${ADMIN_PASSWORD}" ]]; then
+      ADMIN_PASSWORD="$(ovpn_strong_password 24)"
+      ADMIN_PASSWORD_GENERATED=1
     fi
   fi
 
@@ -113,6 +126,13 @@ collect_config() {
 }
 
 collect_config
+
+if [[ "${OVPN_INSTALL_DRY_RUN:-0}" -eq 1 ]]; then
+  printf 'DRY_RUN admin_user=%s\n' "${ADMIN_USER}"
+  printf 'DRY_RUN admin_password=%s\n' "${ADMIN_PASSWORD}"
+  printf 'DRY_RUN password_generated=%s\n' "${ADMIN_PASSWORD_GENERATED}"
+  exit 0
+fi
 
 # --- system packages ---------------------------------------------------------
 ovpn_log "Installing system packages"
@@ -198,15 +218,16 @@ ovpn_panel_install_units
 ovpn_panel_install_cli
 
 ovpn_log "Creating admin account"
-if [[ -n "${ADMIN_PASSWORD}" ]]; then
-  ADMIN_OUT="$(OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
-    "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli create-admin "${ADMIN_USER}" \
-    --password "${ADMIN_PASSWORD}" 2>&1 || true)"
-else
-  ADMIN_OUT="$(OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
-    "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli create-admin "${ADMIN_USER}" 2>&1 || true)"
-fi
+ADMIN_OUT="$(OVPN_PANEL_CONFIG_DIR="${OVPN_PANEL_CONFIG_DIR}" \
+  "${OVPN_PANEL_VENV}/bin/python" -m scripts.cli create-admin "${ADMIN_USER}" \
+  --password "${ADMIN_PASSWORD}" 2>&1 || true)"
 printf '%s\n' "${ADMIN_OUT}"
 
-ovpn_panel_print_access
+# Persist credentials (mode 600) and show every access detail once at the end.
+ovpn_panel_write_credentials "${ADMIN_USER}" "${ADMIN_PASSWORD}" \
+  "${PANEL_PORT}" "${PANEL_HOST}"
+ovpn_panel_print_access "${ADMIN_PASSWORD}"
+if [[ "${ADMIN_PASSWORD_GENERATED}" -eq 1 && "${ADMIN_PASSWORD_FLAG}" -eq 0 ]]; then
+  ovpn_warn "A strong random admin password was generated; it is shown above ONCE."
+fi
 ovpn_log "Installation complete."

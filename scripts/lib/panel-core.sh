@@ -75,8 +75,10 @@ ovpn_panel_render_unit_port() {
 }
 
 # --- access info -------------------------------------------------------------
+# Print every piece of access information. When <password> is supplied it is
+# shown once here; callers that only want status may omit it.
 ovpn_panel_print_access() {
-  local port host admin
+  local password="${1:-}" port host admin
   port="$(ovpn_panel_get_port)"
   admin="$(ovpn_panel_get_admin)"
   host="$(ovpn_env_get OVPN_PANEL_HOST 2>/dev/null || true)"
@@ -86,6 +88,9 @@ ovpn_panel_print_access() {
   printf '  OpenVPN Web Panel installed\n'
   printf '================================================================\n'
   printf '  Admin user     : %s\n' "${admin}"
+  if [[ -n "${password}" ]]; then
+    printf '  Admin password : %s  (shown once - store it now)\n' "${password}"
+  fi
   printf '  Listening on   : http://127.0.0.1:%s (bind to localhost)\n' "${port}"
   if [[ -n "${host}" ]]; then
     printf '  Public URL     : http://%s:%s/  (put a TLS reverse proxy in front)\n' "${host}" "${port}"
@@ -97,6 +102,24 @@ ovpn_panel_print_access() {
   printf '  OpenVPN PKI    : %s\n' "${OVPN_PKI_DIR}"
   printf '  Instances      : %s\n' "$(ovpn_panel_instance_names | paste -sd', ' - || true)"
   printf '================================================================\n\n'
+}
+
+# Persist the credentials to a root-only file (mode 600).
+ovpn_panel_write_credentials() {
+  local user="$1" password="$2" port="$3" host="${4:-}"
+  local file="${OVPN_PANEL_CONFIG_DIR}/credentials.txt"
+  install -d -m 0750 "${OVPN_PANEL_CONFIG_DIR}"
+  {
+    printf '# OpenVPN Web Panel access credentials - keep private\n'
+    printf 'OVPN_PANEL_URL=http://%s:%s/\n' "${host:-<server-ip>}" "${port}"
+    printf 'OVPN_ADMIN_USER=%s\n' "${user}"
+    printf 'OVPN_ADMIN_PASSWORD=%s\n' "${password}"
+    printf 'OVPN_PANEL_CONFIG_DIR=%s\n' "${OVPN_PANEL_CONFIG_DIR}"
+    printf 'OVPN_PKI_DIR=%s\n' "${OVPN_PKI_DIR}"
+    printf 'OVPN_INSTANCES=%s\n' "$(ovpn_panel_instance_names | paste -sd', ' - 2>/dev/null || true)"
+  } >"${file}"
+  chmod 0600 "${file}"
+  ovpn_ok "credentials saved to ${file} (mode 600)"
 }
 
 # --- panel app install -------------------------------------------------------

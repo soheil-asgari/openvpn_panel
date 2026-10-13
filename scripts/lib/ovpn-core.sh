@@ -46,6 +46,53 @@ ovpn_require_root() {
   [[ "${EUID}" -eq 0 ]] || ovpn_die "must run as root (try: sudo $0)"
 }
 
+# --- secrets -----------------------------------------------------------------
+# Random alphanumeric token of <n> characters (URL/shell safe).
+ovpn_rand_token() {
+  local n="${1:-16}"
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 "$((n + 16))" 2>/dev/null | tr -dc 'A-Za-z0-9' | cut -c1-"${n}"
+  else
+    LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c "${n}" || true
+  fi
+}
+
+# Strong random password: >=16 chars including upper, lower, digit and symbol.
+ovpn_strong_password() {
+  local len="${1:-24}"
+  [[ "${len}" -ge 16 ]] || len=16
+  local u='ABCDEFGHJKLMNPQRSTUVWXYZ'
+  local l='abcdefghijkmnopqrstuvwxyz'
+  local d='23456789'
+  local s='!@#$%^*-_+='
+  local pw
+  pw="${u:$((RANDOM % ${#u})):1}${l:$((RANDOM % ${#l})):1}"
+  pw+="${d:$((RANDOM % ${#d})):1}${s:$((RANDOM % ${#s})):1}"
+  pw="${pw}$(ovpn_rand_token "$((len - 4))")"
+  printf '%s' "${pw:0:len}"
+}
+
+# True when <pw> is >=16 chars and carries all four character classes.
+ovpn_password_is_strong() {
+  local pw="$1"
+  [[ "${#pw}" -ge 16 ]] || return 1
+  [[ "${pw}" == *[A-Z]* ]] || return 1
+  [[ "${pw}" == *[a-z]* ]] || return 1
+  [[ "${pw}" == *[0-9]* ]] || return 1
+  [[ "${pw}" == *[!A-Za-z0-9]* ]] || return 1
+}
+
+# Echo the admin password to use: the provided value verbatim, or a freshly
+# generated strong one when empty. A user-supplied password is never rejected.
+ovpn_resolve_admin_password() {
+  local provided="${1:-}"
+  if [[ -n "${provided}" ]]; then
+    printf '%s' "${provided}"
+  else
+    ovpn_strong_password 24
+  fi
+}
+
 # --- OS / package detection --------------------------------------------------
 OVPN_OS_ID=""
 OVPN_OS_VER=""

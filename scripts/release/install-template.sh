@@ -85,7 +85,7 @@ Subcommands:
 Options:
   -y, --yes           non-interactive; accept defaults / provided values
       --user NAME     admin username
-      --password PW   admin password (forced strong)
+      --password PW   admin password (empty = strong random)
       --port N        panel port
       --path PATH     custom admin path prefix (default /)
       --domain HOST   public hostname (enables Let's Encrypt when --email given)
@@ -174,15 +174,31 @@ prompt() {
   printf -v "${__var}" '%s' "${__ans:-${__def}}"
 }
 
-strong_password() { openssl rand -base64 24 2>/dev/null | tr -d '/+=' | cut -c1-20; }
+# Strong random password: >=16 chars covering upper, lower, digit and symbol.
+strong_password() {
+  local len=24
+  local u='ABCDEFGHJKLMNPQRSTUVWXYZ' l='abcdefghijkmnopqrstuvwxyz'
+  local d='23456789' s='!@#$%^*-_+='
+  local pw tail=""
+  pw="${u:$((RANDOM % ${#u})):1}${l:$((RANDOM % ${#l})):1}"
+  pw+="${d:$((RANDOM % ${#d})):1}${s:$((RANDOM % ${#s})):1}"
+  if command -v openssl >/dev/null 2>&1; then
+    tail="$(openssl rand -base64 32 2>/dev/null | tr -dc 'A-Za-z0-9' | cut -c1-40)"
+  fi
+  while [[ ${#tail} -lt $((len - 4)) ]]; do
+    tail+="${u:$((RANDOM % ${#u})):1}${l:$((RANDOM % ${#l})):1}${d:$((RANDOM % ${#d})):1}"
+  done
+  pw+="${tail}"
+  printf '%s' "${pw:0:len}"
+}
 
 is_strong() {
   local pw="$1"
-  [[ ${#pw} -ge 12 ]] || return 1
-  [[ "${pw}" =~ [A-Z] ]] || return 1
-  [[ "${pw}" =~ [a-z] ]] || return 1
-  [[ "${pw}" =~ [0-9] ]] || return 1
-  [[ "${pw}" =~ [^A-Za-z0-9] ]] || return 1
+  [[ ${#pw} -ge 16 ]] || return 1
+  [[ "${pw}" == *[A-Z]* ]] || return 1
+  [[ "${pw}" == *[a-z]* ]] || return 1
+  [[ "${pw}" == *[0-9]* ]] || return 1
+  [[ "${pw}" == *[!A-Za-z0-9]* ]] || return 1
 }
 
 collect_config() {
@@ -192,16 +208,23 @@ collect_config() {
   [[ "${ADMIN_USER}" =~ ^[A-Za-z0-9_.-]{3,32}$ ]] || die "invalid admin username: ${ADMIN_USER}"
   [[ -n "${ADMIN_PATH}" ]] || prompt ADMIN_PATH "Custom admin path" "/"
 
-  if [[ -z "${ADMIN_PASSWORD}" ]]; then
-    if [[ "${ASSUME_YES}" -eq 1 || ! -t 0 ]]; then
-      ADMIN_PASSWORD="$(strong_password)"
-    else
-      local pw=""
-      read -r -s -p "Admin password (empty = strong random): " pw; printf '\n'
-      ADMIN_PASSWORD="${pw:-$(strong_password)}"
-    fi
+  ADMIN_PASSWORD_GENERATED=0
+  if [[ -z "${ADMIN_PASSWORD}" && "${ASSUME_YES}" -eq 0 && -t 0 ]]; then
+    local pw=""
+    read -r -s -p "Admin password (empty = strong random): " pw; printf '\n'
+    ADMIN_PASSWORD="${pw}"
   fi
-  is_strong "${ADMIN_PASSWORD}" || die "admin password is too weak (need >=12 chars, upper, lower, digit, symbol)"
+  # Empty input (Enter, --password "" or omitted) => strong random password.
+  if [[ -z "${ADMIN_PASSWORD}" ]]; then
+    ADMIN_PASSWORD="$(strong_password)"
+    ADMIN_PASSWORD_GENERATED=1
+  fi
+  # Only user-typed / flag-provided passwords are checked, and only as advice:
+  # any password the operator chooses is accepted.
+  if [[ "${ADMIN_PASSWORD_GENERATED}" -eq 0 ]]; then
+    is_strong "${ADMIN_PASSWORD}" \
+      || warn "admin password is weak (want >=16 chars, upper, lower, digit, symbol); accepting it anyway"
+  fi
 
   [[ -n "${DOMAIN}" ]] || prompt DOMAIN "Public domain (empty = none)" ""
   if [[ -n "${DOMAIN}" && -z "${EMAIL}" ]]; then
@@ -361,6 +384,7 @@ write_summary() {
     printf 'Version       : %s\n' "${VERSION}"
     printf 'Panel URL     : http://%s:%s%s\n' "${host}" "${PANEL_PORT}" "${ADMIN_PATH:-/}"
     printf 'Admin user    : %s\n' "${ADMIN_USER}"
+    printf 'Admin password: %s\n' "${ADMIN_PASSWORD}"
     printf 'Config/env    : %s/panel.env\n' "${CONFIG_DIR}"
     printf 'Install dir   : %s\n' "${INSTALL_DIR}"
     printf 'Log           : %s\n' "${LOG_FILE}"
@@ -369,8 +393,14 @@ write_summary() {
     printf 'and (optionally) add a second server as a node. See docs/.\n'
   } >"${SUMMARY_FILE}"
   chmod 0600 "${SUMMARY_FILE}"
-  # The password is written ONLY here, never to stdout or the log file.
-  printf 'Admin password: %s\n' "${ADMIN_PASSWORD}" >>"${SUMMARY_FILE}"
+  # Show every access detail once, at the very end of the install.
+  printf '\n'
+  printf '================================================================\n'
+  cat "${SUMMARY_FILE}" >&2
+  printf '================================================================\n'
+  if [[ "${ADMIN_PASSWORD_GENERATED:-0}" -eq 1 ]]; then
+    warn "The admin password above was randomly generated; it is shown ONCE."
+  fi
   ok "summary saved to ${SUMMARY_FILE} (mode 600)"
 }
 
