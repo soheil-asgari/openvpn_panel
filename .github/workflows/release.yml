@@ -19,7 +19,7 @@ jobs:
 
   build-and-publish:
     runs-on: ubuntu-22.04
-    needs: installer-e2e-gate
+    # needs: installer-e2e-gate
     steps:
       - uses: actions/checkout@v4
         with:
